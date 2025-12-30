@@ -1,0 +1,371 @@
+{
+    "symptoms": {
+        "fever": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "high"
+            ],
+            "related_conditions": [
+                "influenza",
+                "malaria",
+                "typhoid",
+                "covid19",
+                "dengue"
+            ],
+            "urgency_factors": {
+                "duration_days_gt_3": "doctor_needed",
+                "temp_f_gt_103": "emergency",
+                "with_difficulty_breathing": "emergency"
+            },
+            "translations": {
+                "en": "fever",
+                "hi": "बुखार",
+                "ta": "காய்ச்சல்",
+                "te": "జ్వరం",
+                "bn": "জ্বর",
+                "mr": "ताप",
+                "gu": "તાવ"
+            }
+        },
+        "headache": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "migraine",
+                "tension_headache",
+                "sinusitis",
+                "dehydration"
+            ],
+            "urgency_factors": {
+                "sudden_severe": "emergency",
+                "with_vision_changes": "doctor_needed",
+                "with_neck_stiffness": "emergency"
+            },
+            "translations": {
+                "en": "headache",
+                "hi": "सिर दर्द",
+                "ta": "தலைவலி",
+                "te": "తలనొప్పి",
+                "bn": "মাথাব্যথা",
+                "mr": "डोकेदुखी",
+                "gu": "માથાનો દુખાવો"
+            }
+        },
+        "cough": {
+            "severity_levels": [
+                "dry",
+                "productive",
+                "severe"
+            ],
+            "related_conditions": [
+                "common_cold",
+                "bronchitis",
+                "pneumonia",
+                "tuberculosis"
+            ],
+            "urgency_factors": {
+                "with_blood": "emergency",
+                "duration_weeks_gt_3": "doctor_needed",
+                "with_chest_pain": "doctor_needed"
+            },
+            "translations": {
+                "en": "cough",
+                "hi": "खांसी",
+                "ta": "இருமல்",
+                "te": "దగ్గు",
+                "bn": "কাশি",
+                "mr": "खोकला",
+                "gu": "ઉધરસ"
+            }
+        },
+        "body_ache": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "flu",
+                "dengue",
+                "viral_infection"
+            ],
+            "urgency_factors": {
+                "with_high_fever": "doctor_needed",
+                "severe_pain": "doctor_needed"
+            },
+            "translations": {
+                "en": "body ache",
+                "hi": "शरीर में दर्द",
+                "ta": "உடல் வலி",
+                "te": "శరీర నొప్పి",
+                "bn": "শরীর ব্যাথা",
+                "mr": "शरीर दुखणे",
+                "gu": "શરીર દુખાવો"
+            }
+        },
+        "stomach_pain": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "gastritis",
+                "food_poisoning",
+                "appendicitis",
+                "ulcer"
+            ],
+            "urgency_factors": {
+                "severe_lower_right": "emergency",
+                "with_vomiting_blood": "emergency",
+                "persistent_severe": "doctor_needed"
+            },
+            "translations": {
+                "en": "stomach pain",
+                "hi": "पेट दर्द",
+                "ta": "வயிற்று வலி",
+                "te": "కడుపు నొప్పి",
+                "bn": "পেট ব্যাথা",
+                "mr": "पोटदुखी",
+                "gu": "પેટ દુખાવો"
+            }
+        },
+        "difficulty_breathing": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "asthma",
+                "pneumonia",
+                "covid19",
+                "heart_disease"
+            ],
+            "urgency_factors": {
+                "any": "emergency"
+            },
+            "translations": {
+                "en": "difficulty breathing",
+                "hi": "सांस लेने में कठिनाई",
+                "ta": "மூச்சு திணறல்",
+                "te": "శ్వాస తీసుకోవడంలో ఇబ్బంది",
+                "bn": "শ্বাসকষ্ট",
+                "mr": "श्वास घेण्यास त्रास",
+                "gu": "શ્વાસ લેવામાં મુશ્કેલી"
+            }
+        },
+        "diarrhea": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "food_poisoning",
+                "gastroenteritis",
+                "cholera"
+            ],
+            "urgency_factors": {
+                "with_dehydration": "doctor_needed",
+                "bloody": "doctor_needed",
+                "duration_days_gt_2": "doctor_needed"
+            },
+            "translations": {
+                "en": "diarrhea",
+                "hi": "दस्त",
+                "ta": "வயிற்றுப்போக்கு",
+                "te": "అతిసారం",
+                "bn": "ডায়রিয়া",
+                "mr": "अतिसार",
+                "gu": "ઝાડા"
+            }
+        },
+        "emergency_condition": {
+            "severity_levels": [
+                "severe"
+            ],
+            "related_conditions": [
+                "heart_attack",
+                "stroke",
+                "trauma",
+                "severe_infection"
+            ],
+            "urgency_factors": {
+                "any": "emergency"
+            },
+            "translations": {
+                "en": "critical condition",
+                "hi": "गंभीर स्थिति",
+                "ta": "அவசர நிலை",
+                "synonyms": "dying, death, heart attack, stroke, unconscious, collapse, suicide, kill me"
+            }
+        },
+        "infection": {
+            "severity_levels": [
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "bacterial_infection",
+                "viral_infection",
+                "sepsis"
+            ],
+            "urgency_factors": {
+                "high_wbc": "doctor_needed",
+                "severe": "emergency"
+            },
+            "translations": {
+                "en": "infection",
+                "hi": "संक्रमण",
+                "synonyms": "high wbc, high cbc, septic"
+            }
+        },
+        "low_platelets": {
+            "severity_levels": [
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "dengue",
+                "malaria",
+                "viral_fever"
+            ],
+            "urgency_factors": {
+                "very_low": "emergency"
+            },
+            "translations": {
+                "en": "low platelet count",
+                "hi": "कम प्लेटलेट्स",
+                "synonyms": "thrombocytopenia, low platelets"
+            }
+        },
+        "weakness": {
+            "severity_levels": [
+                "mild",
+                "moderate",
+                "severe"
+            ],
+            "related_conditions": [
+                "anemia",
+                "dehydration",
+                "viral_fever"
+            ],
+            "urgency_factors": {
+                "severe": "doctor_needed"
+            },
+            "translations": {
+                "en": "weakness",
+                "hi": "कमज़ोरी",
+                "synonyms": "tired, fatigue, low energy, low wbc"
+            }
+        }
+    },
+    "conditions": {
+        "influenza": {
+            "common_symptoms": [
+                "fever",
+                "cough",
+                "body_ache",
+                "fatigue",
+                "headache"
+            ],
+            "urgency": "self_care",
+            "recommendations": {
+                "en": [
+                    "Rest and get plenty of sleep",
+                    "Drink lots of fluids (water, warm soups)",
+                    "Take paracetamol for fever and pain",
+                    "Gargle with warm salt water for sore throat"
+                ],
+                "hi": [
+                    "आराम करें और भरपूर नींद लें",
+                    "अधिक तरल पदार्थ पिएं (पानी, गर्म सूप)",
+                    "बुखार और दर्द के लिए पैरासिटामोल लें",
+                    "गले की खराश के लिए गर्म नमक के पानी से गरारे करें"
+                ]
+            },
+            "when_to_see_doctor": {
+                "en": [
+                    "Fever persists for more than 3 days",
+                    "Difficulty breathing develops",
+                    "Severe weakness or dizziness"
+                ]
+            }
+        },
+        "common_cold": {
+            "common_symptoms": [
+                "cough",
+                "runny_nose",
+                "sore_throat",
+                "mild_fever"
+            ],
+            "urgency": "self_care",
+            "recommendations": {
+                "en": [
+                    "Rest and stay hydrated",
+                    "Drink warm liquids (tea, soup)",
+                    "Use steam inhalation",
+                    "Take over-the-counter cold medicine if needed"
+                ],
+                "hi": [
+                    "आराम करें और हाइड्रेटेड रहें",
+                    "गर्म तरल पदार्थ पिएं (चाय, सूप)",
+                    "भाप लें",
+                    "जरूरत पड़ने पर काउंटर पर उपलब्ध सर्दी की दवा लें"
+                ]
+            }
+        },
+        "gastritis": {
+            "common_symptoms": [
+                "stomach_pain",
+                "nausea",
+                "bloating"
+            ],
+            "urgency": "self_care",
+            "recommendations": {
+                "en": [
+                    "Eat smaller, more frequent meals",
+                    "Avoid spicy and oily foods",
+                    "Don't lie down immediately after eating",
+                    "Take antacid if needed"
+                ]
+            }
+        },
+        "dehydration": {
+            "common_symptoms": [
+                "dizziness",
+                "fatigue",
+                "dark_urine",
+                "dry_mouth"
+            ],
+            "urgency": "doctor_needed",
+            "recommendations": {
+                "en": [
+                    "Drink ORS (oral rehydration solution)",
+                    "Sip water throughout the day",
+                    "Avoid caffeinated drinks",
+                    "Seek medical help if symptoms worsen"
+                ]
+            }
+        }
+    },
+    "emergency_conditions": [
+        "chest_pain",
+        "difficulty_breathing",
+        "severe_bleeding",
+        "loss_of_consciousness",
+        "stroke_symptoms",
+        "severe_allergic_reaction"
+    ],
+    "emergency_contacts": {
+        "india": {
+            "ambulance": "108",
+            "emergency": "112"
+        }
+    }
+}

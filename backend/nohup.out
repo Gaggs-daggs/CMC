@@ -1,0 +1,15 @@
+{"asctime": "2025-12-30 11:30:14", "name": "root", "levelname": "INFO", "message": "Multilingual Health AI logging initialized", "debug": true}
+INFO:     Started server process [26729]
+INFO:     Waiting for application startup.
+{"asctime": "2025-12-30 11:30:14", "name": "root", "levelname": "INFO", "message": "Starting application..."}
+{"asctime": "2025-12-30 11:30:14", "name": "app.utils.database", "levelname": "INFO", "message": "Using in-memory storage for development"}
+{"asctime": "2025-12-30 11:30:14", "name": "root", "levelname": "INFO", "message": "Application started successfully"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"asctime": "2025-12-30 11:33:19", "name": "root", "levelname": "INFO", "message": "Shutting down application..."}
+{"asctime": "2025-12-30 11:33:19", "name": "app.utils.database", "levelname": "INFO", "message": "Closed database connection"}
+{"asctime": "2025-12-30 11:33:19", "name": "root", "levelname": "INFO", "message": "Application shutdown complete"}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [26729]
