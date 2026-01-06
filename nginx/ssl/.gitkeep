@@ -1,0 +1,3 @@
+# SSL certificates go here
+# For production, use Let's Encrypt or your SSL provider
+# Files needed: fullchain.pem and privkey.pem

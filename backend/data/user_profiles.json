@@ -1,0 +1,29 @@
+{
+  "7132492164": {
+    "phone_number": "7132492164",
+    "user_id": "b54282e9c9805540",
+    "name": null,
+    "age": null,
+    "gender": null,
+    "blood_type": "unknown",
+    "height_cm": null,
+    "weight_kg": null,
+    "preferred_language": "en",
+    "location": null,
+    "medical_conditions": [],
+    "allergies": [],
+    "current_medications": [],
+    "family_history": [],
+    "smoking": null,
+    "alcohol": null,
+    "exercise_frequency": null,
+    "recurring_symptoms": [],
+    "symptom_frequency": {},
+    "emergency_contact": null,
+    "created_at": "2026-01-03T03:32:25.069569",
+    "updated_at": "2026-01-03T03:32:25.069573",
+    "last_consultation": null,
+    "total_consultations": 0,
+    "consultation_history": []
+  }
+}

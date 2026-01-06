@@ -1,7 +1,35 @@
 import { useState, useRef, useEffect } from 'react'
-import './App.css'
+import { motion, AnimatePresence } from 'framer-motion'
+import './App.premium.css'
+import WebGLBackground from './components/WebGLBackground'
+import {
+  MedicalCrossIcon,
+  HeartPulseIcon,
+  PillIcon,
+  StethoscopeIcon,
+  ActivityPulseIcon,
+  ShieldCheckIcon,
+  UserIcon as PremiumUserIcon,
+  BotIcon as PremiumBotIcon,
+  MicrophoneIcon,
+  SendIcon as PremiumSendIcon,
+  VolumeIcon as PremiumVolumeIcon,
+  VolumeOffIcon as PremiumVolumeOffIcon,
+  CameraIcon as PremiumCameraIcon,
+  DownloadIcon as PremiumDownloadIcon,
+  TrashIcon as PremiumTrashIcon,
+  PhoneIcon as PremiumPhoneIcon,
+  CloseIcon,
+  AlertTriangleIcon,
+  MessageSquareIcon,
+  ClipboardMedicalIcon,
+  LifebuoyIcon,
+  HeartHandshakeIcon,
+  StopCircleIcon as PremiumStopCircleIcon
+} from './components/PremiumIcons'
 
-const API_BASE = 'http://localhost:8000/api/v1'
+// API URL: Uses environment variable in production, localhost in development
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 const STORAGE_KEY = 'cmc_health_session'
 
 // All Indian Languages with native script names
@@ -31,7 +59,32 @@ const getSpeechLang = (lang) => {
   return m[lang] || 'en-IN'
 }
 
-// Load session from localStorage
+// Premium icon wrappers with consistent sizing
+const HeartIcon = () => <HeartPulseIcon size={24} />
+const MicIcon = () => <MicrophoneIcon size={24} />
+const SendIcon = () => <PremiumSendIcon size={24} />
+const VolumeIcon = () => <PremiumVolumeIcon size={24} />
+const VolumeOffIcon = () => <PremiumVolumeOffIcon size={24} />
+const ActivityIcon = () => <ActivityPulseIcon size={24} />
+const UserIcon = () => <PremiumUserIcon size={24} />
+const BotIcon = () => <PremiumBotIcon size={24} />
+const MessageIcon = () => <MessageSquareIcon size={24} />
+const AlertIcon = () => <AlertTriangleIcon size={24} />
+const DownloadIcon = () => <PremiumDownloadIcon size={24} />
+const TrashIcon = () => <PremiumTrashIcon size={24} />
+const PhoneIcon = () => <PremiumPhoneIcon size={24} />
+const XIcon = () => <CloseIcon size={24} />
+const CameraIcon = () => <PremiumCameraIcon size={24} />
+const ImageIcon = () => <PremiumCameraIcon size={24} />
+const PillIconComponent = () => <PillIcon size={24} />
+const ShieldIcon = () => <ShieldCheckIcon size={24} />
+const HeartHandIcon = () => <HeartHandshakeIcon size={24} />
+const LifeBuoyIcon = () => <LifebuoyIcon size={24} />
+const ClipboardIcon = () => <ClipboardMedicalIcon size={24} />
+const StethoscopeIconComponent = () => <StethoscopeIcon size={24} />
+const HeartPulseIconComponent = () => <HeartPulseIcon size={24} />
+const StopIcon = () => <PremiumStopCircleIcon size={24} />
+const StopCircleIcon = () => <PremiumStopCircleIcon size={24} />
 const loadSession = () => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -64,32 +117,6 @@ const detectLanguage = (text) => {
   if (/[\u0A80-\u0AFF]/.test(text)) return 'gu'
   return 'en'
 }
-
-const HeartIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-const MicIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-const SendIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-const VolumeIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-const VolumeOffIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-const ActivityIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-const UserIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-const BotIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
-const MessageIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-const AlertIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-const DownloadIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-const TrashIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-const PhoneIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-const XIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-const CameraIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-const ImageIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-const PillIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.5 20.5L3.5 13.5a4.95 4.95 0 1 1 7-7l7 7a4.95 4.95 0 1 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>
-const ShieldIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-const HeartHandIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/><path d="m18 15-2-2"/><path d="m15 18-2-2"/></svg>
-const LifeBuoyIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
-const ClipboardIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-const StethoscopeIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
-const HeartPulseIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>
-const StopIcon = () => <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-const StopCircleIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
 
 // Format AI response with sections
 const FormattedMessage = ({ text, triage, medications, mentalHealth }) => {
@@ -267,6 +294,7 @@ export default function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [suggestedMeds, setSuggestedMeds] = useState(savedSession?.medications || [])
+  const [medsExpanded, setMedsExpanded] = useState(false)
   const [triageInfo, setTriageInfo] = useState(savedSession?.triage || null)
   const [mentalHealthInfo, setMentalHealthInfo] = useState(savedSession?.mentalHealth || null)
   const [showMentalHealthSupport, setShowMentalHealthSupport] = useState(false)
@@ -399,20 +427,221 @@ export default function App() {
     else { recognitionRef.current.start(); setIsListening(true) }
   }
 
-  const startChat = async () => {
+  // New state for profile management
+  const [profileData, setProfileData] = useState(null)
+  const [showProfileForm, setShowProfileForm] = useState(false)
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    age: '',
+    gender: 'not_specified',
+    blood_type: '',
+    height_cm: '',
+    weight_kg: '',
+    allergies: [],
+    conditions: []
+  })
+  const [newAllergy, setNewAllergy] = useState('')
+  const [newCondition, setNewCondition] = useState('')
+  const [isReturningUser, setIsReturningUser] = useState(false)
+  
+  // BMI Calculation
+  const calculateBMI = () => {
+    const h = parseFloat(profileForm.height_cm)
+    const w = parseFloat(profileForm.weight_kg)
+    if (h > 0 && w > 0) {
+      const heightM = h / 100
+      return (w / (heightM * heightM)).toFixed(1)
+    }
+    return null
+  }
+  
+  const getBMICategory = (bmi) => {
+    if (!bmi) return null
+    const b = parseFloat(bmi)
+    if (b < 18.5) return { label: 'Underweight', color: '#3b82f6', icon: '📉' }
+    if (b < 25) return { label: 'Normal', color: '#22c55e', icon: '✅' }
+    if (b < 30) return { label: 'Overweight', color: '#f59e0b', icon: '⚠️' }
+    return { label: 'Obese', color: '#ef4444', icon: '🔴' }
+  }
+  
+  const bmi = calculateBMI()
+  const bmiCategory = getBMICategory(bmi)
+  
+  // Autocomplete state
+  const [allergySuggestions, setAllergySuggestions] = useState([])
+  const [conditionSuggestions, setConditionSuggestions] = useState([])
+  const [showAllergySuggestions, setShowAllergySuggestions] = useState(false)
+  const [showConditionSuggestions, setShowConditionSuggestions] = useState(false)
+
+  // Debounced autocomplete search
+  const searchAllergens = async (query) => {
+    if (query.length < 1) {
+      setAllergySuggestions([])
+      setShowAllergySuggestions(false)
+      return
+    }
+    try {
+      const res = await fetch(`${API_BASE}/autocomplete/allergens?q=${encodeURIComponent(query)}&limit=8`)
+      const data = await res.json()
+      if (data.success) {
+        setAllergySuggestions(data.results)
+        setShowAllergySuggestions(data.results.length > 0)
+      }
+    } catch (e) {
+      console.error('Allergen search failed:', e)
+    }
+  }
+
+  const searchConditions = async (query) => {
+    if (query.length < 1) {
+      setConditionSuggestions([])
+      setShowConditionSuggestions(false)
+      return
+    }
+    try {
+      const res = await fetch(`${API_BASE}/autocomplete/conditions?q=${encodeURIComponent(query)}&limit=8`)
+      const data = await res.json()
+      if (data.success) {
+        setConditionSuggestions(data.results)
+        setShowConditionSuggestions(data.results.length > 0)
+      }
+    } catch (e) {
+      console.error('Condition search failed:', e)
+    }
+  }
+
+  // Debounce timers
+  const allergyTimerRef = useRef(null)
+  const conditionTimerRef = useRef(null)
+
+  const handleAllergyInput = (value) => {
+    setNewAllergy(value)
+    if (allergyTimerRef.current) clearTimeout(allergyTimerRef.current)
+    allergyTimerRef.current = setTimeout(() => searchAllergens(value), 200)
+  }
+
+  const handleConditionInput = (value) => {
+    setNewCondition(value)
+    if (conditionTimerRef.current) clearTimeout(conditionTimerRef.current)
+    conditionTimerRef.current = setTimeout(() => searchConditions(value), 200)
+  }
+
+  const selectAllergySuggestion = (name) => {
+    if (!profileForm.allergies.includes(name)) {
+      setProfileForm(p => ({ ...p, allergies: [...p.allergies, name] }))
+    }
+    setNewAllergy('')
+    setShowAllergySuggestions(false)
+  }
+
+  const selectConditionSuggestion = (name) => {
+    if (!profileForm.conditions.includes(name)) {
+      setProfileForm(p => ({ ...p, conditions: [...p.conditions, name] }))
+    }
+    setNewCondition('')
+    setShowConditionSuggestions(false)
+  }
+
+  const checkProfileAndStart = async () => {
     if (!phone.trim()) return alert('Enter phone number')
+    setLoading(true)
+    try {
+      // First check if profile exists
+      const checkRes = await fetch(`${API_BASE}/profile/check`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone })
+      })
+      const checkData = await checkRes.json()
+      
+      if (checkData.exists) {
+        // Returning user - fetch full profile and start chat
+        setIsReturningUser(true)
+        setProfileData(checkData)
+        await startChat(checkData.profile_name)
+      } else {
+        // New user - show profile creation form
+        setShowProfileForm(true)
+        setLoading(false)
+      }
+    } catch (e) { 
+      console.error('Profile check failed:', e)
+      // Fallback to direct chat start if profile service fails
+      await startChat()
+    }
+  }
+
+  const createProfileAndStart = async () => {
+    setLoading(true)
+    try {
+      // Create the profile
+      const createRes = await fetch(`${API_BASE}/profile/create`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone_number: phone,
+          name: profileForm.name || 'User',
+          age: profileForm.age ? parseInt(profileForm.age) : null,
+          gender: profileForm.gender,
+          blood_type: profileForm.blood_type || null,
+          height_cm: profileForm.height_cm ? parseFloat(profileForm.height_cm) : null,
+          weight_kg: profileForm.weight_kg ? parseFloat(profileForm.weight_kg) : null,
+          allergies: profileForm.allergies,
+          chronic_conditions: profileForm.conditions
+        })
+      })
+      
+      if (!createRes.ok) {
+        throw new Error('Failed to create profile')
+      }
+      
+      setShowProfileForm(false)
+      await startChat(profileForm.name)
+    } catch (e) {
+      console.error('Profile creation failed:', e)
+      alert('Could not create profile. Starting without profile.')
+      setShowProfileForm(false)
+      await startChat()
+    }
+  }
+
+  const addAllergy = () => {
+    if (newAllergy.trim()) {
+      setProfileForm(p => ({ ...p, allergies: [...p.allergies, newAllergy.trim()] }))
+      setNewAllergy('')
+    }
+  }
+
+  const addCondition = () => {
+    if (newCondition.trim()) {
+      setProfileForm(p => ({ ...p, conditions: [...p.conditions, newCondition.trim()] }))
+      setNewCondition('')
+    }
+  }
+
+  const removeAllergy = (idx) => setProfileForm(p => ({ ...p, allergies: p.allergies.filter((_, i) => i !== idx) }))
+  const removeCondition = (idx) => setProfileForm(p => ({ ...p, conditions: p.conditions.filter((_, i) => i !== idx) }))
+
+  const startChat = async (userName = null) => {
     setLoading(true)
     try {
       const res = await fetch(`${API_BASE}/conversation/start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: phone, language })
+        body: JSON.stringify({ user_id: phone, language, phone_number: phone })
       })
       const data = await res.json()
       setSessionId(data.session_id)
-      setMessages([{ role: 'assistant', text: data.greeting, time: new Date() }])
+      
+      // Personalized greeting for returning users
+      let greeting = data.greeting
+      if (userName && isReturningUser) {
+        greeting = `Welcome back, ${userName}! ${data.greeting}`
+      } else if (userName) {
+        greeting = `Hello ${userName}! ${data.greeting}`
+      }
+      
+      setMessages([{ role: 'assistant', text: greeting, time: new Date() }])
       setView('chat')
       setConnected(true)
-      setTimeout(() => speak(data.greeting), 500)
+      setTimeout(() => speak(greeting), 500)
     } catch (e) { setConnected(false); alert('Server offline') }
     setLoading(false)
   }
@@ -464,13 +693,26 @@ export default function App() {
         mentalHealth: data.mental_health || null
       }])
       
-      // Update symptoms and urgency
+      // Update symptoms and urgency - replace with latest, don't accumulate stale ones
       if (data.symptoms_detected?.length > 0) {
-        setDetectedSymptoms(prev => [...new Set([...prev, ...data.symptoms_detected])])
+        // Only keep meaningful symptoms (filter out context phrases)
+        const cleanSymptoms = data.symptoms_detected
+          .filter(s => s.split(' ').length <= 3) // Max 3 words
+          .slice(0, 5) // Max 5 symptoms shown
+        setDetectedSymptoms(cleanSymptoms)
       }
       if (data.urgency_level) {
         setUrgencyLevel(data.urgency_level)
         if (data.urgency_level === 'emergency') setShowEmergency(true)
+      }
+      
+      // Update suggested medications - replace with current response
+      if (data.medications?.length > 0) {
+        console.log('💊 Setting medications:', data.medications)
+        setSuggestedMeds(data.medications)
+      } else {
+        console.log('💊 No medications in response')
+        setSuggestedMeds([]) // Clear if no medications in response
       }
       
       // Update triage information
@@ -489,11 +731,6 @@ export default function App() {
         } else if (data.mental_health.severity === 'moderate' || data.mental_health.severity === 'high') {
           setShowMentalHealthSupport(true)
         }
-      }
-      
-      // Update suggested medications
-      if (data.medications?.length > 0) {
-        setSuggestedMeds(data.medications)
       }
       
       speak(txt)
@@ -630,95 +867,884 @@ export default function App() {
   const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const quickActions = [{ label: 'Headache', msg: 'I have a headache' }, { label: 'Fever', msg: 'I have fever' }, { label: 'Stomach', msg: 'I have stomach pain' }, { label: 'Anxiety', msg: 'I feel anxious' }, { label: 'Sleep', msg: 'I cannot sleep' }]
 
+  // Animation variants for Framer Motion
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.5, staggerChildren: 0.1 } }
+  }
+  
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+  }
+  
+  const cardVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.4 } },
+    hover: { scale: 1.02, boxShadow: "0 20px 40px rgba(0, 212, 170, 0.15)" }
+  }
+  
+  const buttonVariants = {
+    hover: { scale: 1.05, boxShadow: "0 10px 30px rgba(0, 212, 170, 0.4)" },
+    tap: { scale: 0.95 }
+  }
+
   if (view === 'home') {
     return (
-      <div className="app-container">
-        {/* Medical Disclaimer Modal */}
-        {showDisclaimer && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <div className="modal-header">
-                <AlertIcon />
-                <h2>Medical Disclaimer</h2>
-              </div>
-              <div className="modal-content">
-                <p><strong>Important:</strong> CMC Health is an AI-powered health information tool and is NOT a substitute for professional medical advice, diagnosis, or treatment.</p>
-                <ul>
-                  <li>Always consult a qualified healthcare provider for medical concerns</li>
-                  <li>In case of emergency, call 108 (India) or your local emergency number</li>
-                  <li>Do not ignore professional medical advice based on AI suggestions</li>
-                  <li>The AI may make mistakes - verify important information</li>
-                </ul>
-                <p>By using this app, you acknowledge that you understand these limitations.</p>
-              </div>
-              <button className="modal-btn" onClick={() => { localStorage.setItem('cmc_disclaimer_accepted', 'true'); setShowDisclaimer(false) }}>
-                I Understand
-              </button>
-            </div>
-          </div>
-        )}
+      <div className="app-container premium-theme">
+        {/* WebGL Background */}
+        <WebGLBackground />
         
-        <header className="header">
+        {/* Medical Disclaimer Modal */}
+        <AnimatePresence>
+          {showDisclaimer && (
+            <motion.div 
+              className="modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="modal"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                <div className="modal-header">
+                  <AlertIcon />
+                  <h2>Medical Disclaimer</h2>
+                </div>
+                <div className="modal-content">
+                  <p><strong>Important:</strong> CMC Health is an AI-powered health information tool and is NOT a substitute for professional medical advice, diagnosis, or treatment.</p>
+                  <ul>
+                    <li>Always consult a qualified healthcare provider for medical concerns</li>
+                    <li>In case of emergency, call 108 (India) or your local emergency number</li>
+                    <li>Do not ignore professional medical advice based on AI suggestions</li>
+                    <li>The AI may make mistakes - verify important information</li>
+                  </ul>
+                  <p>By using this app, you acknowledge that you understand these limitations.</p>
+                </div>
+                <motion.button 
+                  className="modal-btn" 
+                  onClick={() => { localStorage.setItem('cmc_disclaimer_accepted', 'true'); setShowDisclaimer(false) }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  I Understand
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <motion.header 
+          className="header"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="logo-container">
-            <div className="logo"><HeartIcon /></div>
-            <h1 className="app-title">CMC Health</h1>
+            <motion.div 
+              className="logo premium-logo"
+              animate={{ 
+                boxShadow: ["0 0 20px rgba(0, 212, 170, 0.3)", "0 0 40px rgba(0, 212, 170, 0.5)", "0 0 20px rgba(0, 212, 170, 0.3)"]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <MedicalCrossIcon size={32} />
+            </motion.div>
+            <h1 className="app-title premium-title">CMC Health</h1>
           </div>
-          <p className="app-subtitle">AI-Powered Health Assistant</p>
-        </header>
-        <main className="main-content">
-          <div className="glass-card">
+          <motion.p 
+            className="app-subtitle"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            AI-Powered Health Assistant
+          </motion.p>
+        </motion.header>
+        
+        <motion.main 
+          className="main-content"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div 
+            className="glass-card premium-card"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="status-bar">
-              <div className="status-indicator">
-                <span className={`status-dot ${connected ? '' : 'offline'}`}></span>
+              <motion.div 
+                className="status-indicator"
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <span className={`status-dot ${connected ? 'pulse' : 'offline'}`}></span>
                 {connected ? 'Ready' : 'Offline'}
-              </div>
+              </motion.div>
             </div>
-            <div className="welcome-message">
-              <div className="welcome-icon"><MessageIcon /></div>
+            
+            <motion.div className="welcome-message" variants={itemVariants}>
+              <motion.div 
+                className="welcome-icon premium-welcome-icon"
+                animate={{ 
+                  rotate: [0, 5, -5, 0],
+                  scale: [1, 1.05, 1]
+                }}
+                transition={{ duration: 3, repeat: Infinity }}
+              >
+                <HeartPulseIcon size={48} />
+              </motion.div>
               <h2 className="welcome-title">Welcome to CMC Health</h2>
               <p className="welcome-text">Your personal AI health assistant. Get instant guidance in your language.</p>
-            </div>
-            <div className="input-area">
+            </motion.div>
+            
+            <motion.div className="input-area" variants={itemVariants}>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display:'block', fontSize:'0.875rem', color:'var(--text-secondary)', marginBottom:'0.5rem', fontWeight:'500' }}>Phone Number</label>
-                <input type="tel" className="input-field" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 9876543210" style={{ width:'100%' }} />
+                <motion.input 
+                  type="tel" 
+                  className="input-field premium-input" 
+                  value={phone} 
+                  onChange={e => setPhone(e.target.value)} 
+                  placeholder="+91 9876543210" 
+                  style={{ width:'100%' }}
+                  whileFocus={{ boxShadow: "0 0 0 3px rgba(0, 212, 170, 0.3)" }}
+                />
               </div>
               <div className="language-selector" style={{ marginBottom:'1rem', justifyContent:'flex-start' }}>
                 <label>Language</label>
-                <select className="language-select" value={language} onChange={e => { setLanguage(e.target.value); setDetectedLang(e.target.value) }}>
+                <select className="language-select premium-select" value={language} onChange={e => { setLanguage(e.target.value); setDetectedLang(e.target.value) }}>
                   {Object.entries(langNames).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
                 </select>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'1.5rem' }}>
-                <input type="checkbox" id="voice" checked={voiceEnabled} onChange={e => setVoiceEnabled(e.target.checked)} style={{ width:'18px', height:'18px', accentColor:'var(--primary-color)' }} />
+                <input type="checkbox" id="voice" checked={voiceEnabled} onChange={e => setVoiceEnabled(e.target.checked)} style={{ width:'18px', height:'18px', accentColor:'var(--accent-teal)' }} />
                 <label htmlFor="voice" style={{ fontSize:'0.9rem', color:'var(--text-secondary)', cursor:'pointer' }}>Enable voice responses</label>
               </div>
-              <button className="action-btn send-btn" onClick={startChat} disabled={loading} style={{ width:'100%', height:'50px', fontSize:'1rem', fontWeight:'600' }}>
-                {loading ? <div className="loading-spinner"></div> : 'Start Consultation'}
-              </button>
-            </div>
-          </div>
-        </main>
-        <footer className="footer"><p>For informational purposes only. Consult a healthcare professional.</p></footer>
+              <motion.button 
+                className="action-btn send-btn premium-btn" 
+                onClick={checkProfileAndStart} 
+                disabled={loading} 
+                style={{ width:'100%', height:'50px', fontSize:'1rem', fontWeight:'600' }}
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+              >
+                {loading ? <div className="loading-spinner"></div> : (
+                  <>
+                    <StethoscopeIcon size={20} />
+                    <span style={{ marginLeft: '0.5rem' }}>Start Consultation</span>
+                  </>
+                )}
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        </motion.main>
+        
+        {/* Premium Profile Creation Modal */}
+        <AnimatePresence>
+          {showProfileForm && (
+            <motion.div 
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.8)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: '1rem'
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowProfileForm(false)}
+            >
+              <motion.div 
+                onClick={(e) => e.stopPropagation()}
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(26, 31, 46, 0.98) 0%, rgba(15, 20, 30, 0.98) 100%)',
+                  borderRadius: '1.5rem',
+                  border: '1px solid rgba(0, 212, 170, 0.2)',
+                  boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(0, 212, 170, 0.1)',
+                  maxWidth: '600px',
+                  width: '100%',
+                  maxHeight: '90vh',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                {/* Modal Header */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 212, 170, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%)',
+                  padding: '1.5rem 2rem',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #00d4aa 0%, #6366f1 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 20px rgba(0, 212, 170, 0.4)'
+                  }}>
+                    <PremiumUserIcon size={26} />
+                  </div>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '700', color: '#ffffff' }}>
+                      Create Your Health Profile
+                    </h2>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+                      Personalized care starts with knowing you
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setShowProfileForm(false)}
+                    style={{
+                      marginLeft: 'auto',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: 'rgba(255, 255, 255, 0.6)',
+                      fontSize: '1.25rem',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => { e.target.style.background = 'rgba(255, 255, 255, 0.2)'; e.target.style.color = '#fff' }}
+                    onMouseLeave={e => { e.target.style.background = 'rgba(255, 255, 255, 0.1)'; e.target.style.color = 'rgba(255, 255, 255, 0.6)' }}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div style={{ padding: '1.5rem 2rem', overflowY: 'auto', flex: 1 }}>
+                  {/* Personal Info Section */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem', 
+                      marginBottom: '1rem',
+                      color: '#00d4aa',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em'
+                    }}>
+                      <span style={{ width: '20px', height: '1px', background: '#00d4aa' }}></span>
+                      Personal Information
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>
+                          Full Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={profileForm.name} 
+                          onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))}
+                          placeholder="Enter your full name"
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            transition: 'all 0.2s',
+                            boxSizing: 'border-box'
+                          }}
+                          onFocus={e => { e.target.style.borderColor = '#00d4aa'; e.target.style.boxShadow = '0 0 0 3px rgba(0, 212, 170, 0.1)' }}
+                          onBlur={e => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; e.target.style.boxShadow = 'none' }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>Age</label>
+                        <input 
+                          type="number" 
+                          value={profileForm.age} 
+                          onChange={e => setProfileForm(p => ({ ...p, age: e.target.value }))}
+                          placeholder="Age"
+                          min="0" max="150"
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                          onFocus={e => { e.target.style.borderColor = '#00d4aa'; e.target.style.boxShadow = '0 0 0 3px rgba(0, 212, 170, 0.1)' }}
+                          onBlur={e => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; e.target.style.boxShadow = 'none' }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8r                        -- View consultations with user info
+                        SELECT p.name, p.phone_number, c.symptoms, c.ai_response, c.created_at 
+                        FROM consultations c 
+                        JOIN user_profiles p ON c.user_id = p.id 
+                        ORDER BY c.created_at DESC;em', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>Gender</label>
+                        <select 
+                          value={profileForm.gender}
+                          onChange={e => setProfileForm(p => ({ ...p, gender: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <option value="not_specified" style={{ background: '#1a1f2e' }}>Prefer not to say</option>
+                          <option value="male" style={{ background: '#1a1f2e' }}>Male</option>
+                          <option value="female" style={{ background: '#1a1f2e' }}>Female</option>
+                          <option value="other" style={{ background: '#1a1f2e' }}>Other</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>Blood Type</label>
+                        <select 
+                          value={profileForm.blood_type}
+                          onChange={e => setProfileForm(p => ({ ...p, blood_type: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <option value="" style={{ background: '#1a1f2e' }}>Unknown</option>
+                          <option value="A+" style={{ background: '#1a1f2e' }}>A+</option>
+                          <option value="A-" style={{ background: '#1a1f2e' }}>A-</option>
+                          <option value="B+" style={{ background: '#1a1f2e' }}>B+</option>
+                          <option value="B-" style={{ background: '#1a1f2e' }}>B-</option>
+                          <option value="AB+" style={{ background: '#1a1f2e' }}>AB+</option>
+                          <option value="AB-" style={{ background: '#1a1f2e' }}>AB-</option>
+                          <option value="O+" style={{ background: '#1a1f2e' }}>O+</option>
+                          <option value="O-" style={{ background: '#1a1f2e' }}>O-</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Body Metrics Section with BMI */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem', 
+                      marginBottom: '1rem',
+                      color: '#6366f1',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em'
+                    }}>
+                      <span style={{ width: '20px', height: '1px', background: '#6366f1' }}></span>
+                      Body Metrics & BMI
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', alignItems: 'end' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>
+                          Height (cm)
+                        </label>
+                        <input 
+                          type="number" 
+                          value={profileForm.height_cm} 
+                          onChange={e => setProfileForm(p => ({ ...p, height_cm: e.target.value }))}
+                          placeholder="170"
+                          min="50" max="300"
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                          onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)' }}
+                          onBlur={e => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; e.target.style.boxShadow = 'none' }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>
+                          Weight (kg)
+                        </label>
+                        <input 
+                          type="number" 
+                          value={profileForm.weight_kg} 
+                          onChange={e => setProfileForm(p => ({ ...p, weight_kg: e.target.value }))}
+                          placeholder="70"
+                          min="20" max="500"
+                          style={{
+                            width: '100%',
+                            padding: '0.875rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '0.75rem',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                          onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)' }}
+                          onBlur={e => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; e.target.style.boxShadow = 'none' }}
+                        />
+                      </div>
+                      
+                      {/* BMI Display Widget */}
+                      <div style={{
+                        background: bmi ? (
+                          parseFloat(bmi) < 18.5 ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.05) 100%)' :
+                          parseFloat(bmi) < 25 ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.05) 100%)' :
+                          parseFloat(bmi) < 30 ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%)' :
+                          'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.05) 100%)'
+                        ) : 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
+                        border: `1px solid ${bmi ? (
+                          parseFloat(bmi) < 18.5 ? 'rgba(59, 130, 246, 0.3)' :
+                          parseFloat(bmi) < 25 ? 'rgba(34, 197, 94, 0.3)' :
+                          parseFloat(bmi) < 30 ? 'rgba(245, 158, 11, 0.3)' :
+                          'rgba(239, 68, 68, 0.3)'
+                        ) : 'rgba(255, 255, 255, 0.1)'}`,
+                        borderRadius: '0.75rem',
+                        padding: '0.75rem',
+                        textAlign: 'center',
+                        minHeight: '70px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}>
+                        {bmi ? (
+                          <>
+                            <div style={{ 
+                              fontSize: '1.5rem', 
+                              fontWeight: '700',
+                              color: parseFloat(bmi) < 18.5 ? '#3b82f6' :
+                                     parseFloat(bmi) < 25 ? '#22c55e' :
+                                     parseFloat(bmi) < 30 ? '#f59e0b' : '#ef4444'
+                            }}>
+                              {bmi}
+                            </div>
+                            <div style={{ 
+                              fontSize: '0.7rem', 
+                              color: 'rgba(255, 255, 255, 0.6)',
+                              marginTop: '0.25rem',
+                              fontWeight: '500'
+                            }}>
+                              BMI • {parseFloat(bmi) < 18.5 ? 'Underweight' :
+                                     parseFloat(bmi) < 25 ? 'Normal' :
+                                     parseFloat(bmi) < 30 ? 'Overweight' : 'Obese'}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.4)' }}>
+                            Enter height & weight<br/>to calculate BMI
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Medical History Section */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem', 
+                      marginBottom: '1rem',
+                      color: '#ef4444',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em'
+                    }}>
+                      <span style={{ width: '20px', height: '1px', background: '#ef4444' }}></span>
+                      Medical History
+                    </div>
+                    
+                    {/* Allergies Input */}
+                    <div style={{ marginBottom: '1rem', position: 'relative', zIndex: 20 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>
+                        <AlertTriangleIcon size={14} />
+                        Known Allergies
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                          <input 
+                            type="text" 
+                            value={newAllergy} 
+                            onChange={e => handleAllergyInput(e.target.value)}
+                            onFocus={e => { 
+                              e.target.style.borderColor = '#ef4444'; 
+                              e.target.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)'; 
+                              newAllergy.length > 0 && searchAllergens(newAllergy) 
+                            }}
+                            onBlur={e => { 
+                              e.target.style.borderColor = 'rgba(239, 68, 68, 0.2)'; 
+                              e.target.style.boxShadow = 'none'; 
+                              setTimeout(() => setShowAllergySuggestions(false), 200) 
+                            }}
+                            placeholder="Type to search allergies..."
+                            onKeyPress={e => e.key === 'Enter' && addAllergy()}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem 1rem',
+                              background: 'rgba(239, 68, 68, 0.05)',
+                              border: '1px solid rgba(239, 68, 68, 0.2)',
+                              borderRadius: '0.75rem',
+                              color: '#ffffff',
+                              fontSize: '0.9rem',
+                              outline: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          {/* Allergy Autocomplete Dropdown */}
+                          {showAllergySuggestions && allergySuggestions.length > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 4px)',
+                              left: 0,
+                              right: 0,
+                              background: '#1a1f2e',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: '0.75rem',
+                              maxHeight: '180px',
+                              overflowY: 'auto',
+                              zIndex: 9999,
+                              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                            }}>
+                              {allergySuggestions.map((s, i) => (
+                                <div 
+                                  key={i}
+                                  onMouseDown={() => selectAllergySuggestion(s.name)}
+                                  style={{
+                                    padding: '0.65rem 1rem',
+                                    cursor: 'pointer',
+                                    borderBottom: i < allergySuggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                                    transition: 'background 0.15s',
+                                    background: 'transparent'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <div style={{ fontWeight: '500', color: '#ffffff', fontSize: '0.85rem' }}>{s.name}</div>
+                                  <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                                    {s.category} • <span style={{ color: s.severity_typical === 'severe' ? '#ef4444' : s.severity_typical === 'moderate' ? '#f59e0b' : '#22c55e' }}>{s.severity_typical}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button 
+                          onClick={addAllergy} 
+                          style={{
+                            padding: '0.75rem 1.25rem',
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            borderRadius: '0.75rem',
+                            color: '#ef4444',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={e => { e.target.style.background = 'rgba(239, 68, 68, 0.3)' }}
+                          onMouseLeave={e => { e.target.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%)' }}
+                        >Add</button>
+                      </div>
+                      {profileForm.allergies.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
+                          {profileForm.allergies.map((a, i) => (
+                            <motion.span 
+                              key={i}
+                              initial={{ scale: 0.8, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              style={{ 
+                                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#fca5a5', 
+                                padding: '0.35rem 0.75rem', 
+                                borderRadius: '2rem', 
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                fontWeight: '500'
+                              }}
+                            >
+                              {a}
+                              <span onClick={() => removeAllergy(i)} style={{ cursor: 'pointer', fontWeight: 'bold', opacity: 0.7 }}>×</span>
+                            </motion.span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Conditions Input */}
+                    <div style={{ position: 'relative', zIndex: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>
+                        <HeartPulseIcon size={14} />
+                        Medical Conditions
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                          <input 
+                            type="text" 
+                            value={newCondition} 
+                            onChange={e => handleConditionInput(e.target.value)}
+                            onFocus={e => { 
+                              e.target.style.borderColor = '#00d4aa'; 
+                              e.target.style.boxShadow = '0 0 0 3px rgba(0, 212, 170, 0.1)'; 
+                              newCondition.length > 0 && searchConditions(newCondition) 
+                            }}
+                            onBlur={e => { 
+                              e.target.style.borderColor = 'rgba(0, 212, 170, 0.2)'; 
+                              e.target.style.boxShadow = 'none'; 
+                              setTimeout(() => setShowConditionSuggestions(false), 200) 
+                            }}
+                            placeholder="Type to search conditions..."
+                            onKeyPress={e => e.key === 'Enter' && addCondition()}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem 1rem',
+                              background: 'rgba(0, 212, 170, 0.05)',
+                              border: '1px solid rgba(0, 212, 170, 0.2)',
+                              borderRadius: '0.75rem',
+                              color: '#ffffff',
+                              fontSize: '0.9rem',
+                              outline: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          {/* Condition Autocomplete Dropdown */}
+                          {showConditionSuggestions && conditionSuggestions.length > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 4px)',
+                              left: 0,
+                              right: 0,
+                              background: '#1a1f2e',
+                              border: '1px solid rgba(0, 212, 170, 0.3)',
+                              borderRadius: '0.75rem',
+                              maxHeight: '180px',
+                              overflowY: 'auto',
+                              zIndex: 9999,
+                              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                            }}>
+                              {conditionSuggestions.map((s, i) => (
+                                <div 
+                                  key={i}
+                                  onMouseDown={() => selectConditionSuggestion(s.name)}
+                                  style={{
+                                    padding: '0.65rem 1rem',
+                                    cursor: 'pointer',
+                                    borderBottom: i < conditionSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                                    transition: 'background 0.15s',
+                                    background: 'transparent'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0, 212, 170, 0.1)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <div style={{ fontWeight: '500', color: '#ffffff', fontSize: '0.85rem' }}>{s.name}</div>
+                                  <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                                    {s.category} {s.icd10_code && <span style={{ color: '#00d4aa' }}>• {s.icd10_code}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button 
+                          onClick={addCondition} 
+                          style={{
+                            padding: '0.75rem 1.25rem',
+                            background: 'linear-gradient(135deg, rgba(0, 212, 170, 0.2) 0%, rgba(0, 212, 170, 0.1) 100%)',
+                            border: '1px solid rgba(0, 212, 170, 0.3)',
+                            borderRadius: '0.75rem',
+                            color: '#00d4aa',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={e => { e.target.style.background = 'rgba(0, 212, 170, 0.3)' }}
+                          onMouseLeave={e => { e.target.style.background = 'linear-gradient(135deg, rgba(0, 212, 170, 0.2) 0%, rgba(0, 212, 170, 0.1) 100%)' }}
+                        >Add</button>
+                      </div>
+                      {profileForm.conditions.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
+                          {profileForm.conditions.map((c, i) => (
+                            <motion.span 
+                              key={i}
+                              initial={{ scale: 0.8, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              style={{ 
+                                background: 'linear-gradient(135deg, rgba(0, 212, 170, 0.2) 0%, rgba(0, 212, 170, 0.1) 100%)',
+                                border: '1px solid rgba(0, 212, 170, 0.3)',
+                                color: '#5eead4', 
+                                padding: '0.35rem 0.75rem', 
+                                borderRadius: '2rem', 
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                fontWeight: '500'
+                              }}
+                            >
+                              {c}
+                              <span onClick={() => removeCondition(i)} style={{ cursor: 'pointer', fontWeight: 'bold', opacity: 0.7 }}>×</span>
+                            </motion.span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div style={{ 
+                  padding: '1.25rem 2rem', 
+                  borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  display: 'flex', 
+                  gap: '1rem' 
+                }}>
+                  <motion.button 
+                    onClick={() => { setShowProfileForm(false); startChat() }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      flex: 1,
+                      padding: '0.875rem 1.5rem',
+                      background: 'transparent',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '0.75rem',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      fontSize: '0.95rem',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Skip for Now
+                  </motion.button>
+                  <motion.button 
+                    onClick={createProfileAndStart}
+                    disabled={!profileForm.name.trim()}
+                    whileHover={{ scale: profileForm.name.trim() ? 1.02 : 1 }}
+                    whileTap={{ scale: profileForm.name.trim() ? 0.98 : 1 }}
+                    style={{
+                      flex: 2,
+                      padding: '0.875rem 1.5rem',
+                      background: profileForm.name.trim() 
+                        ? 'linear-gradient(135deg, #00d4aa 0%, #00b894 100%)'
+                        : 'rgba(255, 255, 255, 0.1)',
+                      border: 'none',
+                      borderRadius: '0.75rem',
+                      color: profileForm.name.trim() ? '#000' : 'rgba(255, 255, 255, 0.3)',
+                      fontWeight: '700',
+                      cursor: profileForm.name.trim() ? 'pointer' : 'not-allowed',
+                      fontSize: '0.95rem',
+                      boxShadow: profileForm.name.trim() ? '0 4px 20px rgba(0, 212, 170, 0.4)' : 'none',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    {loading ? <div className="loading-spinner" style={{ width: '20px', height: '20px' }}></div> : (
+                      <>
+                        <span>Create Profile & Start</span>
+                        <span style={{ fontSize: '1.1rem' }}>→</span>
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <motion.footer 
+          className="footer"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+        >
+          <p>For informational purposes only. Consult a healthcare professional.</p>
+        </motion.footer>
       </div>
     )
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container premium-theme">
       {/* Emergency Banner */}
-      {showEmergency && (
-        <div className="emergency-banner">
-          <div className="emergency-content">
-            <AlertIcon />
-            <span>Emergency symptoms detected! Please seek immediate medical attention.</span>
-          </div>
-          <div className="emergency-actions">
-            <a href="tel:108" className="emergency-call"><PhoneIcon /> Call 108</a>
-            <button onClick={() => setShowEmergency(false)}><XIcon /></button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showEmergency && (
+          <motion.div 
+            className="emergency-banner"
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+          >
+            <div className="emergency-content">
+              <AlertIcon />
+              <span>Emergency symptoms detected! Please seek immediate medical attention.</span>
+            </div>
+            <div className="emergency-actions">
+              <a href="tel:108" className="emergency-call"><PhoneIcon /> Call 108</a>
+              <button onClick={() => setShowEmergency(false)}><XIcon /></button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Mental Health Crisis Banner */}
       {showCrisisBanner && (
@@ -819,15 +1845,36 @@ export default function App() {
         </div>
       )}
       
-      <header className="header">
+      <motion.header 
+        className="header"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div className="logo-container">
-          <div className="logo" onClick={() => { setView('home'); stopSpeaking() }} style={{ cursor:'pointer' }}><HeartIcon /></div>
-          <h1 className="app-title">CMC Health</h1>
+          <motion.div 
+            className="logo premium-logo" 
+            onClick={() => { setView('home'); stopSpeaking() }} 
+            style={{ cursor:'pointer' }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <MedicalCrossIcon size={28} />
+          </motion.div>
+          <h1 className="app-title premium-title">CMC Health</h1>
         </div>
         <p className="app-subtitle">Health Consultation</p>
-      </header>
-      <main className="main-content">
-        <div className="glass-card">
+      </motion.header>
+      <motion.main 
+        className="main-content"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <motion.div 
+          className="glass-card premium-card"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           <div className="status-bar">
             <div className="status-indicator">
               <span className={`status-dot ${connected ? '' : 'offline'}`}></span>
@@ -846,53 +1893,137 @@ export default function App() {
           </div>
           
           {/* Symptoms & Triage Summary */}
-          {(detectedSymptoms.length > 0 || triageInfo) && (
-            <div className={`symptoms-bar ${triageInfo?.level || urgencyLevel}`}>
-              {triageInfo && (
-                <div className="triage-badge" style={{ backgroundColor: triageInfo.color || '#4ade80' }}>
-                  <ShieldIcon />
-                  <span>{triageInfo.label || 'Self Care'}</span>
+          {(detectedSymptoms.length > 0 || triageInfo || urgencyLevel !== 'low') && (
+            <motion.div 
+              className={`symptoms-bar ${triageInfo?.level || urgencyLevel}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              transition={{ duration: 0.3 }}
+            >
+              {/* Urgency Level Badge */}
+              <motion.div 
+                className={`urgency-badge-dynamic ${urgencyLevel}`}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                key={urgencyLevel}
+              >
+                {urgencyLevel === 'emergency' && <span className="urgency-icon">🚨</span>}
+                {urgencyLevel === 'urgent' && <span className="urgency-icon">⚠️</span>}
+                {urgencyLevel === 'doctor_soon' && <span className="urgency-icon">🩺</span>}
+                {urgencyLevel === 'routine' && <span className="urgency-icon">📋</span>}
+                {urgencyLevel === 'self_care' && <span className="urgency-icon">✅</span>}
+                <span className="urgency-text">
+                  {urgencyLevel === 'emergency' ? 'Emergency' : 
+                   urgencyLevel === 'urgent' ? 'Urgent' : 
+                   urgencyLevel === 'doctor_soon' ? 'See Doctor Soon' :
+                   urgencyLevel === 'routine' ? 'Routine' : 'Self Care'}
+                </span>
+              </motion.div>
+
+              {/* Detected Symptoms */}
+              {detectedSymptoms.length > 0 && (
+                <div className="detected-symptoms-section">
+                  <span className="symptoms-label">DETECTED:</span>
+                  <div className="symptom-tags-container">
+                    {detectedSymptoms.slice(0, 5).map((s, i) => (
+                      <motion.span 
+                        key={i} 
+                        className="symptom-tag"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                      >
+                        {s}
+                      </motion.span>
+                    ))}
+                    {detectedSymptoms.length > 5 && (
+                      <span className="symptom-tag more">+{detectedSymptoms.length - 5} more</span>
+                    )}
+                  </div>
                 </div>
               )}
-              {detectedSymptoms.length > 0 && (
-                <>
-                  <span className="symptoms-label">Detected:</span>
-                  {detectedSymptoms.slice(0, 5).map((s, i) => <span key={i} className="symptom-tag">{s}</span>)}
-                  {detectedSymptoms.length > 5 && <span className="symptom-tag more">+{detectedSymptoms.length - 5}</span>}
-                </>
+
+              {urgencyLevel === 'emergency' && (
+                <motion.span 
+                  className="urgency-badge emergency"
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 0.5, repeat: Infinity }}
+                >
+                  🚨 Emergency
+                </motion.span>
               )}
-              {triageInfo?.action && (
-                <span className="triage-action">{triageInfo.action}</span>
-              )}
-              {urgencyLevel === 'emergency' && <span className="urgency-badge emergency">🚨 Emergency</span>}
-            </div>
+            </motion.div>
           )}
-          <div className="chat-container">
-            {messages.length === 0 ? (
-              <div className="welcome-message">
-                <div className="welcome-icon"><MessageIcon /></div>
-                <h2 className="welcome-title">How can I help?</h2>
-                <p className="welcome-text">Describe your symptoms or ask health questions.</p>
+
+          {/* Medications Panel - Compact & Collapsible */}
+          {suggestedMeds.length > 0 && (
+            <motion.div 
+              className={`medications-panel ${medsExpanded ? 'expanded' : ''}`}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="medications-header" onClick={() => setMedsExpanded(!medsExpanded)}>
+                <PillIconComponent />
+                <span>Suggested Medications ({suggestedMeds.length})</span>
+                <span className="expand-icon">{medsExpanded ? '▲' : '▼'}</span>
               </div>
-            ) : (
-              messages.map((m, i) => (
-                <div key={i} className={`message ${m.role}`}>
-                  {m.role === 'assistant' && <div className="message-avatar"><BotIcon /></div>}
-                  <div className="message-content">
-                    {/* Triage level indicator */}
-                    {m.role === 'assistant' && m.triage?.level && m.triage.level !== 'self_care' && (
-                      <div className="message-triage-badge" style={{ borderLeftColor: m.triage.color }}>
-                        <ShieldIcon />
-                        <span>{m.triage.label}</span>
-                        {m.triage.detected_condition && <span className="triage-condition">• {m.triage.detected_condition}</span>}
-                      </div>
-                    )}
-                    
-                    {/* Mental Health indicator for message */}
-                    {m.role === 'assistant' && m.mentalHealth?.detected && (
-                      <div className={`message-mh-indicator ${m.mentalHealth.is_crisis ? 'crisis' : m.mentalHealth.severity}`}>
-                        <HeartHandIcon />
-                        <span>{m.mentalHealth.is_crisis ? 'Crisis Support Activated' : 'Mental Health Support'}</span>
+              <div className="medications-list">
+                {(medsExpanded ? suggestedMeds : suggestedMeds.slice(0, 4)).map((med, i) => (
+                  <motion.div 
+                    key={i} 
+                    className="medication-card"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    title={`${med.name || med}${med.warning ? ` - ⚠️ ${med.warning}` : ''}`}
+                  >
+                    <div className="med-name">{med.name || med}</div>
+                    {med.dosage && <div className="med-dosage">{med.dosage}</div>}
+                    {med.frequency && <div className="med-frequency">{med.frequency}</div>}
+                    {med.warning && <div className="med-warning">⚠️ {med.warning}</div>}
+                  </motion.div>
+                ))}
+                {!medsExpanded && suggestedMeds.length > 4 && (
+                  <div className="medication-card" onClick={() => setMedsExpanded(true)} style={{cursor: 'pointer', justifyContent: 'center', alignItems: 'center'}}>
+                    <div className="med-name">+{suggestedMeds.length - 4} more</div>
+                  </div>
+                )}
+              </div>
+              <div className="medications-disclaimer">
+                ⚠️ Consult a doctor before taking any medication
+              </div>
+            </motion.div>
+          )}
+          <div className="chat-wrapper">
+            <div className="chat-webgl-bg">
+              <WebGLBackground contained />
+            </div>
+            <div className="chat-container">
+              {messages.length === 0 ? (
+                <div className="welcome-message">
+                  <div className="welcome-icon"><MessageIcon /></div>
+                  <h2 className="welcome-title">How can I help?</h2>
+                  <p className="welcome-text">Describe your symptoms or ask health questions.</p>
+                </div>
+              ) : (
+                messages.map((m, i) => (
+                  <div key={i} className={`message ${m.role}`}>
+                    {m.role === 'assistant' && <div className="message-avatar"><BotIcon /></div>}
+                    <div className="message-content">
+                      {/* Triage level indicator */}
+                      {m.role === 'assistant' && m.triage?.level && m.triage.level !== 'self_care' && (
+                        <div className="message-triage-badge" style={{ borderLeftColor: m.triage.color }}>
+                          <ShieldIcon />
+                          <span>{m.triage.label}</span>
+                          {m.triage.detected_condition && <span className="triage-condition">• {m.triage.detected_condition}</span>}
+                        </div>
+                      )}
+                      
+                      {/* Mental Health indicator for message */}
+                      {m.role === 'assistant' && m.mentalHealth?.detected && (
+                        <div className={`message-mh-indicator ${m.mentalHealth.is_crisis ? 'crisis' : m.mentalHealth.severity}`}>
+                          <HeartHandIcon />
+                          <span>{m.mentalHealth.is_crisis ? 'Crisis Support Activated' : 'Mental Health Support'}</span>
                       </div>
                     )}
                     
@@ -926,6 +2057,7 @@ export default function App() {
               </div>
             )}
             <div ref={chatEndRef}></div>
+            </div>
           </div>
           <div className="quick-actions">
             {quickActions.map((a, i) => <button key={i} className="quick-action-btn" onClick={() => sendMsg(a.msg)} disabled={loading}>{a.label}</button>)}
@@ -953,45 +2085,28 @@ export default function App() {
                   <StopCircleIcon />
                 </button>
               ) : (
-                <button className="action-btn send-btn" onClick={() => sendMsg()} disabled={!input.trim()}><SendIcon /></button>
+                <motion.button 
+                  className="action-btn send-btn premium-send" 
+                  onClick={() => sendMsg()} 
+                  disabled={!input.trim()}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <SendIcon />
+                </motion.button>
               )}
             </div>
           </div>
-        </div>
-        <div className="glass-card vitals-card">
-          <div className="vitals-header">
-            <div className="vitals-title"><ActivityIcon /> Health Vitals</div>
-            <button className="quick-action-btn" onClick={getVitals} style={{ margin:0 }}>Sync</button>
-          </div>
-          <div className="vitals-grid">
-            <div className="vital-item">
-              <div className="vital-icon heart"><HeartIcon /></div>
-              <div className="vital-label">Heart Rate</div>
-              <div className="vital-value">{vitals?.heartRate || '--'}<span className="vital-unit"> bpm</span></div>
-              {vitals && <span className={`vital-status ${vitals.heartRate < 60 || vitals.heartRate > 100 ? 'warning' : 'normal'}`}>{vitals.heartRate < 60 || vitals.heartRate > 100 ? 'Check' : 'Normal'}</span>}
-            </div>
-            <div className="vital-item">
-              <div className="vital-icon oxygen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-              <div className="vital-label">SpO2</div>
-              <div className="vital-value">{vitals?.spo2 || '--'}<span className="vital-unit">%</span></div>
-              {vitals && <span className={`vital-status ${vitals.spo2 < 95 ? 'warning' : 'normal'}`}>{vitals.spo2 < 95 ? 'Low' : 'Normal'}</span>}
-            </div>
-            <div className="vital-item">
-              <div className="vital-icon temp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg></div>
-              <div className="vital-label">Temperature</div>
-              <div className="vital-value">{vitals?.temp || '--'}<span className="vital-unit">°F</span></div>
-              {vitals && <span className={`vital-status ${parseFloat(vitals.temp) > 99 ? 'warning' : 'normal'}`}>{parseFloat(vitals.temp) > 99 ? 'Elevated' : 'Normal'}</span>}
-            </div>
-            <div className="vital-item">
-              <div className="vital-icon bp"><ActivityIcon /></div>
-              <div className="vital-label">Blood Pressure</div>
-              <div className="vital-value">{vitals?.bp || '--/--'}<span className="vital-unit"> mmHg</span></div>
-              {vitals && <span className="vital-status normal">Normal</span>}
-            </div>
-          </div>
-        </div>
-      </main>
-      <footer className="footer"><p>For informational purposes only. Consult a healthcare professional.</p></footer>
+        </motion.div>
+      </motion.main>
+      <motion.footer 
+        className="footer"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+      >
+        <p>For informational purposes only. Consult a healthcare professional.</p>
+      </motion.footer>
     </div>
   )
 }

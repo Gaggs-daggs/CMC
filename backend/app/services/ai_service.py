@@ -164,15 +164,25 @@ class AIService:
         from .drug_service import drug_service
         from .triage_service import triage_service, mental_health_service, analyze_message
         from .nlp.translator import translation_service
+        # Import Gemini medicine service for dynamic medicine recommendations
+        try:
+            from .gemini_medicine_service import gemini_medicine_service
+            self.gemini_medicine = gemini_medicine_service
+            logger.info("✅ Gemini Medicine Service loaded")
+        except Exception as e:
+            logger.warning(f"⚠️ Gemini Medicine Service not available: {e}")
+            self.gemini_medicine = None
+        
         self.drug_service = drug_service
         self.triage_service = triage_service
         self.mental_health_service = mental_health_service
         self.analyze_message = analyze_message
         self.translator = translation_service
     
-    async def get_ai_response(self, user_message: str, conversation_history: list = None, language: str = "en", vitals: Dict = None) -> Dict[str, Any]:
+    async def get_ai_response(self, user_message: str, conversation_history: list = None, language: str = "en", vitals: Dict = None, session_id: str = None, user_profile: Dict = None) -> Dict[str, Any]:
         import uuid
-        session_id = str(uuid.uuid4())
+        if not session_id:
+            session_id = str(uuid.uuid4())
         
         if conversation_history:
             self.assistant.conversations[session_id] = [
@@ -189,25 +199,76 @@ class AIService:
         # Get AI response
         result = await self.assistant.chat(session_id, user_message, language)
         
-        # Get medication suggestions based on symptoms
-        # BUT NOT for serious conditions (tumors, cancer, diabetes, etc.) or mental health crisis
+        # ==========================================
+        # DYNAMIC MEDICINE EVALUATION (Every Message)
+        # Uses Gemini API with fallback to local database
+        # ==========================================
         symptoms_detected = self._extract_symptoms(user_message)
         medications = []
+        medicine_evaluation = None
         
-        # Check if we should suggest OTC medications
-        # Allow for: self_care, doctor_routine, and also when no serious condition detected
+        # Check if we should suggest medications
         is_serious_condition = triage.get("no_otc", False)
         is_mental_crisis = mental_health.get("is_crisis", False)
         
-        # Suggest meds for minor ailments (headache, fever, cold, etc.)
-        if symptoms_detected and not is_serious_condition and not is_mental_crisis:
+        # Evaluate every message through Gemini for medicine recommendations
+        if self.gemini_medicine and not is_mental_crisis:
             try:
-                drug_result = self.drug_service.get_prescription_response(user_message)
-                if drug_result.get("found_symptoms"):
-                    medications = drug_result.get("medications", [])[:3]
-                    logger.info(f"Medications suggested: {[m.get('name') for m in medications]}")
+                # Build user profile for context
+                profile_context = user_profile or {}
+                
+                # Call Gemini medicine service for dynamic evaluation
+                medicine_evaluation = await self.gemini_medicine.evaluate_message(
+                    session_id=session_id,
+                    message=user_message,
+                    user_profile=profile_context
+                )
+                
+                # Extract medicines from evaluation
+                if medicine_evaluation:
+                    medicine_info = medicine_evaluation.get("medicine_information", [])
+                    if medicine_info:
+                        # Format medicines for response
+                        medications = []
+                        for med in medicine_info[:3]:  # Limit to 3
+                            medications.append({
+                                "name": med.get("brand_name", ""),
+                                "generic": med.get("generic_name", ""),
+                                "composition": med.get("composition", []),
+                                "dosage": med.get("typical_dosage", ""),
+                                "administration": med.get("administration", ""),
+                                "warnings": med.get("contraindications", []),
+                                "alternatives": med.get("alternatives", []),
+                                "otc_status": med.get("otc_status", "OTC"),
+                                "price": med.get("approximate_price", "")
+                            })
+                        
+                        # Update symptoms from Gemini evaluation
+                        all_symptoms = medicine_evaluation.get("all_symptoms", [])
+                        if all_symptoms:
+                            symptoms_detected = all_symptoms
+                        
+                        logger.info(f"💊 Gemini Medicine: {len(medications)} medicines, {len(symptoms_detected)} symptoms tracked")
+                
             except Exception as e:
-                logger.error(f"Drug service error: {e}")
+                logger.error(f"Gemini medicine evaluation error: {e}")
+                # Fallback to old drug service
+                try:
+                    drug_result = self.drug_service.get_prescription_response(user_message)
+                    if drug_result.get("found_symptoms"):
+                        medications = drug_result.get("medications", [])[:3]
+                except Exception as e2:
+                    logger.error(f"Drug service fallback error: {e2}")
+        else:
+            # Use old drug service if Gemini not available
+            if symptoms_detected and not is_serious_condition and not is_mental_crisis:
+                try:
+                    drug_result = self.drug_service.get_prescription_response(user_message)
+                    if drug_result.get("found_symptoms"):
+                        medications = drug_result.get("medications", [])[:3]
+                        logger.info(f"Medications suggested (fallback): {[m.get('name') for m in medications]}")
+                except Exception as e:
+                    logger.error(f"Drug service error: {e}")
         
         # Build response with mental health support if needed
         response_text = result.get("response_text", "Sorry, I couldn't process that.")
@@ -257,7 +318,18 @@ class AIService:
                 "breathing_exercise": mental_health.get("breathing_exercise")
             },
             "requires_immediate_attention": analysis.get("requires_immediate_attention", False),
-            "follow_up_questions": mental_health.get("follow_up_questions", [])
+            "follow_up_questions": mental_health.get("follow_up_questions", []),
+            # New: Dynamic medicine evaluation data
+            "medicine_evaluation": {
+                "possible_conditions": medicine_evaluation.get("possible_conditions", []) if medicine_evaluation else [],
+                "all_symptoms_tracked": medicine_evaluation.get("all_symptoms", symptoms_detected) if medicine_evaluation else symptoms_detected,
+                "symptom_count": medicine_evaluation.get("symptom_count", len(symptoms_detected)) if medicine_evaluation else len(symptoms_detected),
+                "important_notes": medicine_evaluation.get("important_notes", []) if medicine_evaluation else [],
+                "when_to_see_doctor": medicine_evaluation.get("when_to_see_doctor", []) if medicine_evaluation else [],
+                "general_advice": medicine_evaluation.get("general_advice", []) if medicine_evaluation else [],
+                "using_gemini": not (medicine_evaluation.get("fallback_mode", True) if medicine_evaluation else True)
+            },
+            "session_id": session_id
         }
     
     def _extract_symptoms(self, message: str) -> list:

@@ -1,0 +1,99 @@
+# ===========================================
+# Render.com Blueprint - CMC Health
+# ===========================================
+# Deploy with: Connect GitHub repo on render.com
+# This creates all services automatically
+
+services:
+  # ===========================================
+  # Backend API (FastAPI)
+  # ===========================================
+  - type: web
+    name: cmc-backend
+    runtime: python
+    repo: https://github.com/Gaggs-daggs/CMC
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: cmc-database
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: cmc-database
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: cmc-database
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: cmc-database
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: cmc-database
+          property: password
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cmc-database
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: cmc-redis
+          type: redis
+          property: connectionString
+      - key: ENV
+        value: production
+      - key: OLLAMA_HOST
+        sync: false  # Set manually - your Ollama server URL
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # ===========================================
+  # Frontend (React + Vite)
+  # ===========================================
+  - type: web
+    name: cmc-frontend
+    runtime: static
+    repo: https://github.com/Gaggs-daggs/CMC
+    rootDir: frontend/web
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: cmc-backend
+          type: web
+          property: url
+    autoDeploy: true
+
+  # ===========================================
+  # Redis Cache
+  # ===========================================
+  - type: redis
+    name: cmc-redis
+    plan: free  # or starter for production
+    maxmemoryPolicy: allkeys-lru
+
+# ===========================================
+# PostgreSQL Database
+# ===========================================
+databases:
+  - name: cmc-database
+    plan: free  # or starter for production
+    databaseName: cmc_health
+    user: cmc_user
+    postgresMajorVersion: "16"

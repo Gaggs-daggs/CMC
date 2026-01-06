@@ -1,0 +1,5 @@
+# Backups directory
+# Database backups will be stored here
+*.sql
+*.gz
+!.gitkeep

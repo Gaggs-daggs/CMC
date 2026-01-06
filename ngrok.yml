@@ -1,0 +1,31 @@
+# ===========================================
+# Ngrok Configuration for CMC Health
+# ===========================================
+# 
+# Setup:
+#   1. Sign up at https://ngrok.com (FREE)
+#   2. Copy your authtoken from dashboard
+#   3. Run: ngrok config add-authtoken YOUR_TOKEN
+#   4. Then run: ./ngrok-start.sh
+#
+# Or manually:
+#   ngrok start --all --config ngrok.yml
+
+version: "2"
+authtoken: 34glVduPI85cwybT4O5gDhddwG6_2TwkXHmi2D5FafYniM7pQ
+
+tunnels:
+  # Backend API (FastAPI)
+  backend:
+    proto: http
+    addr: 8000
+    inspect: true
+    # Uncomment for custom domain (paid feature)
+    # hostname: api.yourapp.com
+    
+  # Frontend (React/Vite)
+  frontend:
+    proto: http
+    addr: 5173
+    inspect: true
+    # hostname: app.yourapp.com

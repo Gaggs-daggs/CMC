@@ -1,40 +1,36 @@
 """
 Translation Service - Production Level
-Uses Meta's NLLB-200 transformer for natural, conversational translations
-
-NO GOOGLE TRANSLATE - Pure transformer-based translation
+Uses AI4Bharat's IndicTrans2 transformer for natural, conversational translations
 
 Supports all 22 scheduled Indian languages with:
 - Natural conversational tone (not literal/mechanical)
 - Medical term preservation
 - Emotional intelligence in translations
 - Batch translation support
-- Aggressive caching for speed
 """
 
 import logging
 from typing import Optional, Dict, List
 import time
-import hashlib
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Try to import NLLB service
+# Try to import IndicTrans2 service
 try:
     from app.services.nlp.indictrans_translator import (
-        NLLBTranslationService,
-        get_nllb_service,
+        IndicTrans2Service,
+        get_indictrans_service,
         INDIAN_LANGUAGES,
         MEDICAL_TERMS_TO_PRESERVE
     )
-    NLLB_AVAILABLE = True
+    INDICTRANS_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"NLLB not available: {e}")
-    NLLB_AVAILABLE = False
+    logger.warning(f"IndicTrans2 not available: {e}. Falling back to Google Translate.")
+    INDICTRANS_AVAILABLE = False
     
-    # Fallback language definitions (only used if NLLB import fails)
+    # Fallback language definitions
     INDIAN_LANGUAGES = {
         "en": {"name": "English", "native": "English", "tts_code": "en-IN"},
         "hi": {"name": "Hindi", "native": "हिन्दी", "tts_code": "hi-IN"},
@@ -63,36 +59,29 @@ except ImportError as e:
 
 class TranslationService:
     """
-    Production-level translation service using NLLB-200 transformer ONLY.
-    NO Google Translate fallback - pure transformer quality.
-    
-    Speed optimizations:
-    - Pre-cached common medical phrases (instant)
-    - LRU memory cache (instant for repeated queries)
-    - Disk persistence cache
-    - INT8 quantization for CPU
-    - Greedy decoding (vs beam search)
+    Production-level translation service using IndicTrans2 transformer.
+    Falls back to Google Translate if IndicTrans2 is not available.
     """
     
     def __init__(self):
         self._cache = {}
         self._supported_languages = INDIAN_LANGUAGES
-        self._nllb = None
+        self._indictrans = None
         
-        # Initialize NLLB if available
-        if NLLB_AVAILABLE:
+        # Initialize IndicTrans2 if available
+        if INDICTRANS_AVAILABLE:
             try:
-                self._nllb = get_nllb_service()
-                if self._nllb.is_available():
-                    logger.info("✅ TranslationService using NLLB-200 transformer (NO Google)")
+                self._indictrans = get_indictrans_service()
+                if self._indictrans.is_available():
+                    logger.info("✅ TranslationService using IndicTrans2 transformer")
                 else:
-                    logger.warning("⚠️ NLLB model not loaded - translations will return original text")
+                    logger.warning("⚠️ IndicTrans2 model not loaded, will use Google Translate")
             except Exception as e:
-                logger.error(f"Failed to initialize NLLB: {e}")
+                logger.error(f"Failed to initialize IndicTrans2: {e}")
     
     def is_using_transformer(self) -> bool:
-        """Check if using NLLB transformer"""
-        return self._nllb is not None and self._nllb.is_available()
+        """Check if using IndicTrans2 transformer (vs Google Translate)"""
+        return self._indictrans is not None and self._indictrans.is_available()
     
     def get_supported_languages(self) -> Dict:
         """Get all supported Indian languages"""
@@ -107,11 +96,23 @@ class TranslationService:
         lang_info = self._supported_languages.get(lang_code, {})
         return lang_info.get("tts_code", "en-IN")
     
-    def get_cache_stats(self) -> Dict:
-        """Get translation cache statistics"""
-        if self._nllb:
-            return self._nllb.get_cache_stats()
-        return {"cache_hits": 0, "cache_misses": 0, "hit_rate_percent": 0}
+    def _google_translate_fallback(
+        self,
+        text: str,
+        target_language: str,
+        source_language: Optional[str] = None
+    ) -> str:
+        """Fallback to Google Translate"""
+        try:
+            from deep_translator import GoogleTranslator
+            translator = GoogleTranslator(
+                source=source_language or 'auto',
+                target=target_language
+            )
+            return translator.translate(text)
+        except Exception as e:
+            logger.error(f"Google Translate fallback failed: {e}")
+            return text
     
     def translate(
         self,
@@ -121,7 +122,7 @@ class TranslationService:
         preserve_medical: bool = True
     ) -> str:
         """
-        Translate text to target language using NLLB transformer ONLY.
+        Translate text to target language using IndicTrans2 transformer.
         
         Args:
             text: Text to translate
@@ -142,66 +143,57 @@ class TranslationService:
         # Default source to English
         src_lang = source_language or "en"
         
-        if src_lang == target_language:
-            return text
-        
-        # Check local cache
-        cache_key = f"{src_lang}:{target_language}:{hashlib.md5(text.encode()).hexdigest()}"
+        # Check cache
+        cache_key = f"{src_lang}:{target_language}:{hash(text)}"
         if cache_key in self._cache:
-            logger.debug("Translation cache hit (local)")
+            logger.debug("Translation cache hit")
             return self._cache[cache_key]
         
         try:
-            # Use NLLB if available
+            # Use IndicTrans2 if available
             if self.is_using_transformer():
-                translated_text = self._nllb.translate(
+                translated_text = self._indictrans.translate(
                     text=text,
                     target_language=target_language,
                     source_language=src_lang,
                     preserve_medical=preserve_medical
                 )
-                logger.info(f"✅ NLLB: {src_lang} -> {target_language}")
+                logger.info(f"✅ IndicTrans2: {src_lang} -> {target_language}")
             else:
-                # No fallback - return original text
-                logger.warning(f"NLLB not available, returning original text")
-                translated_text = text
+                # Fallback to Google Translate
+                logger.warning(f"Using Google Translate fallback: {src_lang} -> {target_language}")
+                translated_text = self._google_translate_fallback(
+                    text, target_language, src_lang
+                )
             
-            # Cache result locally
+            # Cache result
             self._cache[cache_key] = translated_text
             
             return translated_text
             
         except Exception as e:
             logger.error(f"Translation failed: {e}")
-            return text  # Return original on error
+            return text
     
     def translate_to_english(self, text: str, source_language: Optional[str] = None) -> str:
         """
-        Translate text to English using NLLB
+        Translate text to English
         
         Args:
             text: Text to translate
-            source_language: Source language code
+            source_language: Source language (auto-detect if None)
         
         Returns:
             English translation
         """
-        if not source_language or source_language == "en":
-            return text
-        
-        # NLLB supports Indic->English
-        if self.is_using_transformer():
-            return self._nllb.translate(
-                text=text,
-                target_language="en",
-                source_language=source_language
-            )
-        return text
+        # Note: IndicTrans2 currently only supports En->Indic
+        # For Indic->En, we use Google Translate fallback
+        return self._google_translate_fallback(text, "en", source_language)
     
     def translate_from_english(self, text: str, target_language: str) -> str:
         """
         Translate from English to target Indian language
-        Uses NLLB transformer for natural, conversational tone
+        Uses IndicTrans2 transformer for natural, conversational tone
         
         Args:
             text: English text to translate
@@ -236,29 +228,35 @@ class TranslationService:
         
         src_lang = source_language or "en"
         
-        # Use NLLB batch translation if available
+        # Use IndicTrans2 batch translation if available
         if self.is_using_transformer():
-            return self._nllb.translate_batch(
+            return self._indictrans.translate_batch(
                 texts=texts,
                 target_language=target_language,
                 source_language=src_lang
             )
         
-        # Return original texts if NLLB not available
-        return texts
+        # Fallback to individual translations
+        translated = []
+        for text in texts:
+            translated_text = self.translate(text, target_language, src_lang)
+            translated.append(translated_text)
+            time.sleep(0.1)  # Rate limiting for Google Translate
+        
+        return translated
     
     def clear_cache(self):
         """Clear translation cache"""
         self._cache.clear()
-        if self._nllb:
-            self._nllb._cache.clear()
+        if self._indictrans:
+            self._indictrans._cache.clear()
         logger.info("Translation cache cleared")
     
     def get_translation_engine(self) -> str:
         """Get the name of the translation engine being used"""
         if self.is_using_transformer():
-            return "NLLB-200 (Meta's No Language Left Behind)"
-        return "None (translations disabled)"
+            return "IndicTrans2 (AI4Bharat Transformer)"
+        return "Google Translate (Fallback)"
 
 
 # Global instance

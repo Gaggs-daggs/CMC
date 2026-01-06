@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # API Keys (should be set via environment variables)
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_CLOUD_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
     HUGGINGFACE_TOKEN: Optional[str] = None
     
     # Model Paths
