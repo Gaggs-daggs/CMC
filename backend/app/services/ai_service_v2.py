@@ -1006,6 +1006,9 @@ NO long explanations. Action first."""
             r'\(Assistant interprets.*?\)',
             r'\(User responds.*?\)',
             r'\(Doctor asks.*?\)',
+            r'\(No need for.*?\)',
+            r'\(Optional.*?\)',
+            r'\(Note:.*?\)',
             # Remove "each)" artifacts
             r'\beach\)',
             # Remove standalone timing markers
