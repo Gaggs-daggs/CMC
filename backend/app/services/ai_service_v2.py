@@ -997,14 +997,27 @@ NO long explanations. Action first."""
             r'REMEMBER:.*?(?=\n\n|$)',
             r'Your approach:.*?(?=\n\n|$)',
             r'DO NOT:.*?(?=\n|$)',
-            r'Provide:.*?(?=\n\n|$)',
+            r'Provide:.*?(?=\n|$)',
             r'Be professional but warm\..*?(?=\n|$)',
+            # Remove prompt artifacts like "(1-s)", "(2-s)", etc.
+            r'\(\d+-s\)',
+            # Remove meta-instructions about patient/assistant behavior
+            r'\(Patient provides information.*?\)',
+            r'\(Assistant interprets.*?\)',
+            r'\(User responds.*?\)',
+            r'\(Doctor asks.*?\)',
+            # Remove "each)" artifacts
+            r'\beach\)',
+            # Remove standalone timing markers
+            r'\beach\b\s*\)',
         ]
         for pattern in instruction_patterns:
             text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
         
-        # Remove placeholders like [Name], [Patient's response], etc.
-        text = re.sub(r'\[(?:Name|Patient\'s response|Your name|User)\]', '', text)
+        # Remove placeholders like [Name], [Patient's response], [j], etc.
+        text = re.sub(r'\[(?:Name|Patient\'s response|Your name|User|j|name|patient)\]', '', text, flags=re.IGNORECASE)
+        # Remove any single-letter placeholders in brackets
+        text = re.sub(r'\[([a-zA-Z])\]', '', text)
         
         # Remove extra quotes at start/end
         text = text.strip('"\'')
@@ -1025,6 +1038,11 @@ NO long explanations. Action first."""
         
         # Remove any leftover weird artifacts
         text = text.replace('---', '').strip()
+        
+        # Clean up double commas or spaces around punctuation
+        text = re.sub(r',\s*,', ',', text)
+        text = re.sub(r'\s+([.,!?])', r'\1', text)
+        text = re.sub(r'([.,!?])\s*([.,!?])', r'\1', text)
         
         # If the response is too short after cleaning (just whitespace/garbage), provide fallback
         cleaned = text.strip()
