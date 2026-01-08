@@ -686,8 +686,16 @@ export default function App() {
         return
       }
       
+      // DEBUG: Log what we receive from API
+      console.log('🌐 API Response:', {
+        response: data.response?.substring(0, 50),
+        response_translated: data.response_translated?.substring(0, 50),
+        language: data.language
+      })
+      
       // Use translated response if available, otherwise fall back to English response
       const txt = data.response_translated || data.response || 'No response'
+      console.log('📝 Using text:', txt.substring(0, 50))
       setMessages(m => [...m, { 
         role: 'assistant', 
         text: txt, 
