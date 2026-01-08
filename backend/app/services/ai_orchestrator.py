@@ -64,6 +64,27 @@ except ImportError as e:
     logger.warning(f"Translation service not available: {e}")
     TRANSLATION_AVAILABLE = False
 
+# Import Gemini translator for input/output translation
+try:
+    from app.services.nlp.gemini_translator import GeminiTranslator, get_gemini_translator
+    GEMINI_TRANSLATOR_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Gemini translator not available: {e}")
+    GEMINI_TRANSLATOR_AVAILABLE = False
+
+# Import intent classifier
+try:
+    from app.services.nlp.intent_classifier import (
+        IntelligentIntentClassifier,
+        get_intent_classifier,
+        UserIntent,
+        IntentResult
+    )
+    INTENT_CLASSIFIER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Intent classifier not available: {e}")
+    INTENT_CLASSIFIER_AVAILABLE = False
+
 
 @dataclass
 class OrchestratedResponse:
@@ -181,6 +202,27 @@ class ProductionAIOrchestrator:
             except Exception as e:
                 logger.warning(f"Translation not available: {e}")
         
+        # Gemini Translator (preferred for input/output translation)
+        self.gemini_translator = None
+        if GEMINI_TRANSLATOR_AVAILABLE:
+            try:
+                self.gemini_translator = get_gemini_translator()
+                if self.gemini_translator.available:
+                    logger.info("✅ Gemini Translator initialized (primary)")
+                else:
+                    logger.warning("⚠️ Gemini Translator not available")
+            except Exception as e:
+                logger.warning(f"Gemini Translator not available: {e}")
+        
+        # Intent Classifier
+        self.intent_classifier = None
+        if INTENT_CLASSIFIER_AVAILABLE:
+            try:
+                self.intent_classifier = get_intent_classifier()
+                logger.info("✅ Intent Classifier initialized")
+            except Exception as e:
+                logger.warning(f"Intent Classifier not available: {e}")
+        
         logger.info("🚀 Production AI Orchestrator initialized")
     
     async def process_message(
@@ -227,6 +269,28 @@ class ProductionAIOrchestrator:
             target_language=target_language
         )
         
+        # ========== STEP -1: TRANSLATE INPUT TO ENGLISH ==========
+        # This is CRITICAL - translate user's native language input to English first
+        original_message = message
+        english_message = message
+        input_was_translated = False
+        
+        if target_language != "en" and self.gemini_translator and self.gemini_translator.available:
+            try:
+                english_message, detected_lang, input_was_translated = self.gemini_translator.detect_and_translate_to_english(
+                    message, 
+                    expected_language=target_language
+                )
+                if input_was_translated:
+                    components_used.append(f"input_translation:{detected_lang}")
+                    logger.info(f"🌐 Input translated: '{message}' → '{english_message}'")
+            except Exception as e:
+                logger.warning(f"Input translation failed: {e}")
+                english_message = message
+        
+        # Use English message for all processing
+        message = english_message
+        
         # ========== STEP 0: USER PROFILE CONTEXT ==========
         user_context = ""
         user_allergies = []
@@ -241,6 +305,52 @@ class ProductionAIOrchestrator:
                     logger.info(f"📋 Loaded user profile context for {phone_number}")
             except Exception as e:
                 logger.warning(f"Could not load user profile: {e}")
+        
+        # ========== STEP 0.5: INTENT CLASSIFICATION ==========
+        intent_result = None
+        intent_prompt = None
+        if self.intent_classifier:
+            try:
+                # Get conversation history for context
+                conversation_history = self.ai_assistant.memory.get_context(session_id)
+                intent_result = self.intent_classifier.classify(message, conversation_history)
+                intent_prompt = self.intent_classifier.get_prompt_for_intent(intent_result)
+                components_used.append(f"intent:{intent_result.primary_intent.value}")
+                logger.info(f"🎯 Detected intent: {intent_result.primary_intent.value} (confidence: {intent_result.confidence:.2f})")
+                
+                # Handle greeting intent directly with translation
+                if intent_result.primary_intent == UserIntent.GREETING:
+                    greeting_response = "Hello! I'm your AI health assistant. How can I help you today? Feel free to describe any symptoms or ask health questions."
+                    response.text = greeting_response
+                    
+                    # Translate greeting if not English - prefer Gemini
+                    if target_language != "en":
+                        try:
+                            trans_start = time.time()
+                            if self.gemini_translator and self.gemini_translator.available:
+                                response.text_translated = self.gemini_translator.translate_to_language(
+                                    greeting_response,
+                                    target_language=target_language
+                                )
+                                components_used.append(f"translation:gemini:{target_language}")
+                            elif self.translator:
+                                response.text_translated = self.translator.translate(
+                                    greeting_response,
+                                    target_language=target_language,
+                                    source_language="en"
+                                )
+                                components_used.append(f"translation:nllb:{target_language}")
+                            response.translation_time_ms = int((time.time() - trans_start) * 1000)
+                        except Exception as e:
+                            logger.error(f"Greeting translation error: {e}")
+                            response.text_translated = greeting_response
+                    
+                    response.processing_time_ms = int((time.time() - start_time) * 1000)
+                    response.components_used = components_used
+                    return response
+                    
+            except Exception as e:
+                logger.warning(f"Intent classification failed: {e}")
         
         # ========== STEP 1: TRIAGE (Non-LLM, Instant) ==========
         if self.triage_classifier:
@@ -326,26 +436,40 @@ class ProductionAIOrchestrator:
         
         # ========== STEP 4: AI RESPONSE ==========
         try:
-            # Build enhanced message with context
+            # Build enhanced message with context - but NOT including instructions
+            # Instructions will confuse the AI into repeating them
             context_parts = []
             
             # Add user profile context if available
             if user_context:
-                context_parts.append(f"**Patient Information:**\n{user_context}")
+                context_parts.append(f"Patient Information:\n{user_context}")
             
             # Add RAG context if available
             if rag_context:
-                context_parts.append(f"**Medical Knowledge:**\n{rag_context}")
+                context_parts.append(f"Medical Knowledge:\n{rag_context}")
             
-            # Build final enhanced message
+            # Build final enhanced message - keep it simple and direct
             enhanced_message = message
-            if context_parts:
+            
+            # For greetings, just pass the greeting directly - no context needed
+            if intent_result and intent_result.primary_intent.value == "greeting":
+                enhanced_message = message
+            elif context_parts:
                 context_str = "\n\n".join(context_parts)
-                enhanced_message = f"""{context_str}
+                
+                # For educational queries, make it clear this is informational
+                if intent_result and intent_result.primary_intent.value == "educational":
+                    enhanced_message = f"""Context:
+{context_str}
 
-**User's current concern:** {message}
+User's question: {message}
 
-Provide an accurate, personalized response. Be empathetic and clear. If the patient has known allergies, warn about potential medication interactions."""
+The user is asking for INFORMATION about this topic. Explain it clearly and factually."""
+                else:
+                    enhanced_message = f"""Context:
+{context_str}
+
+User's message: {message}"""
             
             # Get AI response using get_ai_response which handles medication lookup with accumulated symptoms
             ai_response = await get_ai_response(
@@ -415,21 +539,44 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
             except Exception as e:
                 logger.error(f"Safety validation error: {e}")
         
-        # ========== STEP 6: TRANSLATION ==========
-        if target_language != "en" and self.translator:
-            try:
-                trans_start = time.time()
-                response.text_translated = self.translator.translate(
-                    response.text,
-                    target_language=target_language,
-                    source_language="en"
-                )
+        # ========== STEP 6: TRANSLATION (Gemini primary, NLLB fallback) ==========
+        if target_language != "en":
+            trans_start = time.time()
+            translated = None
+            translation_method = None
+            
+            # Try Gemini first (faster and better quality)
+            if self.gemini_translator and self.gemini_translator.available:
+                try:
+                    translated = self.gemini_translator.translate_to_language(
+                        response.text,
+                        target_language=target_language,
+                        preserve_medical=True
+                    )
+                    if translated and translated != response.text:
+                        translation_method = f"translation:gemini:{target_language}"
+                except Exception as e:
+                    logger.warning(f"Gemini translation failed, trying NLLB: {e}")
+            
+            # Fallback to NLLB if Gemini failed
+            if not translated and self.translator:
+                try:
+                    translated = self.translator.translate(
+                        response.text,
+                        target_language=target_language,
+                        source_language="en"
+                    )
+                    translation_method = f"translation:nllb:{target_language}"
+                except Exception as e:
+                    logger.error(f"NLLB translation also failed: {e}")
+            
+            if translated:
+                response.text_translated = translated
                 response.translation_time_ms = int((time.time() - trans_start) * 1000)
-                components_used.append(f"translation:{target_language}")
-                
-            except Exception as e:
-                logger.error(f"Translation error: {e}")
-                response.text_translated = response.text  # Fallback to English
+                if translation_method:
+                    components_used.append(translation_method)
+            else:
+                response.text_translated = response.text
         
         # ========== STEP 8: RECORD CONSULTATION ==========
         if phone_number and PROFILE_SERVICE_AVAILABLE and response.symptoms_detected:
@@ -532,13 +679,21 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get status of all system components"""
+        translation_engine = "None"
+        if self.gemini_translator and self.gemini_translator.available:
+            translation_engine = "Gemini (Primary)"
+        elif self.translator and self.translator.is_using_transformer():
+            translation_engine = "NLLB-200 (Fallback)"
+        
         return {
             "ai_assistant": True,
             "triage_classifier": self.triage_classifier is not None,
             "safety_guardrails": self.safety_guard is not None,
             "rag_knowledge_base": self.knowledge_base is not None,
-            "translation": self.translator is not None and self.translator.is_using_transformer(),
-            "translation_engine": self.translator.get_translation_engine() if self.translator else "None",
+            "translation": (self.gemini_translator and self.gemini_translator.available) or (self.translator is not None),
+            "translation_engine": translation_engine,
+            "gemini_translator": self.gemini_translator is not None and self.gemini_translator.available,
+            "nllb_translator": self.translator is not None and self.translator.is_using_transformer(),
             "translation_cache_stats": self.translator.get_cache_stats() if self.translator else {}
         }
 

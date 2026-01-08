@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_CLOUD_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
+    GEMINI_API_KEYS: Optional[str] = None  # Comma-separated list for rotation
     HUGGINGFACE_TOKEN: Optional[str] = None
     
     # Model Paths

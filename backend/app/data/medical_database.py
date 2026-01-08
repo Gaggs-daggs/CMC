@@ -14,11 +14,11 @@ DRUG_DATABASE = {
     # ==========================================
     "pain": {
         "mild_to_moderate": [
-            {"name": "Paracetamol (Acetaminophen)", "dosage": "500-1000mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "Analgesic", "warning": "Avoid alcohol, liver damage risk"},
-            {"name": "Ibuprofen", "dosage": "200-400mg", "frequency": "Every 6-8 hours", "max_daily": "1200mg OTC", "category": "NSAID", "warning": "Take with food, avoid if kidney issues"},
-            {"name": "Aspirin", "dosage": "325-650mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "NSAID", "warning": "Not for children, bleeding risk"},
-            {"name": "Naproxen", "dosage": "220-440mg", "frequency": "Every 8-12 hours", "max_daily": "660mg OTC", "category": "NSAID", "warning": "Take with food"},
-            {"name": "Diclofenac", "dosage": "50mg", "frequency": "Every 8 hours", "max_daily": "150mg", "category": "NSAID", "warning": "Prescription in some countries"},
+            {"name": "Dolo 650 / Crocin (Paracetamol)", "dosage": "500-650mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "Analgesic", "warning": "Avoid alcohol, liver damage risk"},
+            {"name": "Brufen / Combiflam (Ibuprofen)", "dosage": "200-400mg", "frequency": "Every 6-8 hours", "max_daily": "1200mg OTC", "category": "NSAID", "warning": "Take with food, avoid if kidney issues"},
+            {"name": "Disprin / Ecosprin (Aspirin)", "dosage": "325-650mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "NSAID", "warning": "Not for children, bleeding risk"},
+            {"name": "Naprosyn / Naxdom (Naproxen)", "dosage": "220-440mg", "frequency": "Every 8-12 hours", "max_daily": "660mg OTC", "category": "NSAID", "warning": "Take with food"},
+            {"name": "Voveran / Diclomol (Diclofenac)", "dosage": "50mg", "frequency": "Every 8 hours", "max_daily": "150mg", "category": "NSAID", "warning": "Prescription in some countries"},
         ],
         "moderate_to_severe": [
             {"name": "Tramadol", "dosage": "50-100mg", "frequency": "Every 4-6 hours", "max_daily": "400mg", "category": "Opioid", "warning": "Prescription only, habit forming"},
@@ -37,13 +37,13 @@ DRUG_DATABASE = {
     # ==========================================
     "fever": {
         "adults": [
-            {"name": "Paracetamol", "dosage": "500-1000mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "Antipyretic", "warning": "Stay hydrated"},
-            {"name": "Ibuprofen", "dosage": "200-400mg", "frequency": "Every 6-8 hours", "max_daily": "1200mg", "category": "NSAID/Antipyretic", "warning": "Take with food"},
-            {"name": "Aspirin", "dosage": "325-650mg", "frequency": "Every 4-6 hours", "category": "NSAID/Antipyretic", "warning": "Not for viral infections in children"},
+            {"name": "Dolo 650 / Calpol (Paracetamol)", "dosage": "500-650mg", "frequency": "Every 4-6 hours", "max_daily": "4000mg", "category": "Antipyretic", "warning": "Stay hydrated"},
+            {"name": "Brufen / Ibugesic (Ibuprofen)", "dosage": "200-400mg", "frequency": "Every 6-8 hours", "max_daily": "1200mg", "category": "NSAID/Antipyretic", "warning": "Take with food"},
+            {"name": "Disprin (Aspirin)", "dosage": "325-650mg", "frequency": "Every 4-6 hours", "category": "NSAID/Antipyretic", "warning": "Not for viral infections in children"},
         ],
         "children": [
-            {"name": "Paracetamol Syrup", "dosage": "10-15mg/kg", "frequency": "Every 4-6 hours", "category": "Pediatric Antipyretic", "warning": "Use dosing syringe"},
-            {"name": "Ibuprofen Syrup", "dosage": "5-10mg/kg", "frequency": "Every 6-8 hours", "category": "Pediatric NSAID", "warning": "Not for infants <6 months"},
+            {"name": "Calpol / Crocin DS Syrup (Paracetamol)", "dosage": "10-15mg/kg", "frequency": "Every 4-6 hours", "category": "Pediatric Antipyretic", "warning": "Use dosing syringe"},
+            {"name": "Ibugesic Plus / Brufen Syrup (Ibuprofen)", "dosage": "5-10mg/kg", "frequency": "Every 6-8 hours", "category": "Pediatric NSAID", "warning": "Not for infants <6 months"},
         ]
     },
 
@@ -52,11 +52,11 @@ DRUG_DATABASE = {
     # ==========================================
     "allergy": {
         "non_sedating": [
-            {"name": "Cetirizine (Zyrtec)", "dosage": "10mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "May cause mild drowsiness"},
-            {"name": "Loratadine (Claritin)", "dosage": "10mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Non-drowsy"},
-            {"name": "Fexofenadine (Allegra)", "dosage": "180mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Avoid fruit juice"},
-            {"name": "Desloratadine (Clarinex)", "dosage": "5mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Non-drowsy"},
-            {"name": "Levocetirizine (Xyzal)", "dosage": "5mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Evening dose preferred"},
+            {"name": "Cetzine / Alerid (Cetirizine)", "dosage": "10mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "May cause mild drowsiness"},
+            {"name": "Lorfast / Claritin (Loratadine)", "dosage": "10mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Non-drowsy"},
+            {"name": "Allegra / Fexova (Fexofenadine)", "dosage": "180mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Avoid fruit juice"},
+            {"name": "Deslor (Desloratadine)", "dosage": "5mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Non-drowsy"},
+            {"name": "Xyzal / Levocet (Levocetirizine)", "dosage": "5mg", "frequency": "Once daily", "category": "2nd Gen Antihistamine", "warning": "Evening dose preferred"},
         ],
         "sedating": [
             {"name": "Diphenhydramine (Benadryl)", "dosage": "25-50mg", "frequency": "Every 6-8 hours", "category": "1st Gen Antihistamine", "warning": "Causes drowsiness"},
@@ -97,9 +97,12 @@ DRUG_DATABASE = {
             {"name": "Rabeprazole (Aciphex)", "dosage": "20mg", "frequency": "Once daily", "category": "PPI", "warning": "Prescription"},
         ],
         "antidiarrheal": [
-            {"name": "Loperamide (Imodium)", "dosage": "2mg initially, then 1mg after each stool", "frequency": "As needed", "max_daily": "8mg", "category": "Antidiarrheal", "warning": "Not for bacterial diarrhea"},
-            {"name": "Bismuth Subsalicylate (Pepto-Bismol)", "dosage": "30ml or 2 tablets", "frequency": "Every 30-60 min", "max_daily": "8 doses", "category": "Antidiarrheal", "warning": "Black stool is normal"},
-            {"name": "ORS (Oral Rehydration Salts)", "dosage": "1 packet in 1L water", "frequency": "Throughout day", "category": "Rehydration", "warning": "Essential for diarrhea"},
+            {"name": "Eldoper / Imodium (Loperamide)", "dosage": "2mg initially, then 1mg after each stool", "frequency": "As needed", "max_daily": "8mg", "category": "Antidiarrheal", "warning": "Not for bacterial diarrhea"},
+            {"name": "Pepto-Bismol (Bismuth Subsalicylate)", "dosage": "30ml or 2 tablets", "frequency": "Every 30-60 min", "max_daily": "8 doses", "category": "Antidiarrheal", "warning": "Black stool is normal"},
+            {"name": "Electral / ORS (Oral Rehydration Salts)", "dosage": "1 packet in 1L water", "frequency": "Throughout day", "category": "Rehydration", "warning": "Essential for diarrhea"},
+            {"name": "Norflox TZ / Oflox OZ (Ofloxacin+Ornidazole)", "dosage": "1 tablet", "frequency": "Twice daily", "category": "Antibiotic", "warning": "For infectious diarrhea only, prescription required"},
+            {"name": "Metrogyl / Flagyl (Metronidazole)", "dosage": "400mg", "frequency": "Three times daily", "category": "Antibiotic", "warning": "For amoebic dysentery, avoid alcohol"},
+            {"name": "Racecadotril (Redotil)", "dosage": "100mg", "frequency": "Three times daily", "category": "Antisecretory", "warning": "Reduces fluid loss"},
         ],
         "laxatives": [
             {"name": "Polyethylene Glycol (Miralax)", "dosage": "17g in 8oz liquid", "frequency": "Once daily", "category": "Osmotic Laxative", "warning": "Gentle, may take 1-3 days"},
@@ -287,36 +290,42 @@ DRUG_DATABASE = {
     # ==========================================
     "mental_health": {
         "antidepressants_ssri": [
-            {"name": "Sertraline (Zoloft)", "dosage": "50-200mg", "frequency": "Once daily", "category": "SSRI", "warning": "May take 2-4 weeks to work"},
-            {"name": "Escitalopram (Lexapro)", "dosage": "10-20mg", "frequency": "Once daily", "category": "SSRI", "warning": "Well tolerated"},
-            {"name": "Fluoxetine (Prozac)", "dosage": "20-80mg", "frequency": "Once daily", "category": "SSRI", "warning": "Long half-life"},
-            {"name": "Paroxetine (Paxil)", "dosage": "20-50mg", "frequency": "Once daily", "category": "SSRI", "warning": "Withdrawal symptoms if stopped abruptly"},
-            {"name": "Citalopram (Celexa)", "dosage": "20-40mg", "frequency": "Once daily", "category": "SSRI", "warning": "QT prolongation at high doses"},
+            {"name": "Serta / Zoloft (Sertraline)", "dosage": "50-200mg", "frequency": "Once daily", "category": "SSRI", "warning": "May take 2-4 weeks to work, prescription required"},
+            {"name": "Nexito / Stalopam (Escitalopram)", "dosage": "10-20mg", "frequency": "Once daily", "category": "SSRI", "warning": "Well tolerated, prescription required"},
+            {"name": "Fludac / Prozac (Fluoxetine)", "dosage": "20-80mg", "frequency": "Once daily", "category": "SSRI", "warning": "Long half-life, prescription required"},
+            {"name": "Paxidep (Paroxetine)", "dosage": "20-50mg", "frequency": "Once daily", "category": "SSRI", "warning": "Withdrawal symptoms if stopped abruptly"},
         ],
         "antidepressants_snri": [
-            {"name": "Venlafaxine (Effexor)", "dosage": "75-225mg", "frequency": "Once daily XR", "category": "SNRI", "warning": "May raise BP"},
-            {"name": "Duloxetine (Cymbalta)", "dosage": "30-60mg", "frequency": "Once daily", "category": "SNRI", "warning": "Also for pain"},
+            {"name": "Venlor / Effexor (Venlafaxine)", "dosage": "75-225mg", "frequency": "Once daily XR", "category": "SNRI", "warning": "May raise BP, prescription required"},
+            {"name": "Dulane / Cymbalta (Duloxetine)", "dosage": "30-60mg", "frequency": "Once daily", "category": "SNRI", "warning": "Also for pain, prescription required"},
         ],
         "antidepressants_other": [
-            {"name": "Bupropion (Wellbutrin)", "dosage": "150-300mg", "frequency": "Once or twice daily", "category": "NDRI", "warning": "No sexual side effects, seizure risk"},
-            {"name": "Mirtazapine (Remeron)", "dosage": "15-45mg", "frequency": "At bedtime", "category": "NaSSA", "warning": "Weight gain, sedating"},
+            {"name": "Bupron (Bupropion)", "dosage": "150-300mg", "frequency": "Once or twice daily", "category": "NDRI", "warning": "No sexual side effects, seizure risk"},
+            {"name": "Mirtaz (Mirtazapine)", "dosage": "15-45mg", "frequency": "At bedtime", "category": "NaSSA", "warning": "Weight gain, sedating"},
             {"name": "Trazodone", "dosage": "50-150mg", "frequency": "At bedtime", "category": "SARI", "warning": "Often for sleep"},
         ],
         "anxiolytics": [
-            {"name": "Buspirone", "dosage": "5-15mg", "frequency": "2-3 times daily", "category": "Anxiolytic", "warning": "Takes 2-4 weeks, non-habit forming"},
-            {"name": "Hydroxyzine", "dosage": "25-50mg", "frequency": "3-4 times daily", "category": "Antihistamine/Anxiolytic", "warning": "Sedating"},
+            {"name": "Buspin (Buspirone)", "dosage": "5-15mg", "frequency": "2-3 times daily", "category": "Anxiolytic", "warning": "Takes 2-4 weeks, non-habit forming"},
+            {"name": "Atarax (Hydroxyzine)", "dosage": "25-50mg", "frequency": "3-4 times daily", "category": "Antihistamine/Anxiolytic", "warning": "Sedating, prescription required"},
         ],
         "benzodiazepines": [
-            {"name": "Alprazolam (Xanax)", "dosage": "0.25-0.5mg", "frequency": "3 times daily", "category": "Benzodiazepine", "warning": "Short-term only, addictive"},
-            {"name": "Lorazepam (Ativan)", "dosage": "0.5-2mg", "frequency": "2-3 times daily", "category": "Benzodiazepine", "warning": "Short-term only"},
-            {"name": "Clonazepam (Klonopin)", "dosage": "0.5-2mg", "frequency": "Twice daily", "category": "Benzodiazepine", "warning": "Longer acting"},
-            {"name": "Diazepam (Valium)", "dosage": "2-10mg", "frequency": "2-4 times daily", "category": "Benzodiazepine", "warning": "Long half-life"},
+            {"name": "Alprax / Anxit (Alprazolam)", "dosage": "0.25-0.5mg", "frequency": "3 times daily", "category": "Benzodiazepine", "warning": "Short-term only, addictive, prescription required"},
+            {"name": "Ativan / Lopez (Lorazepam)", "dosage": "0.5-2mg", "frequency": "2-3 times daily", "category": "Benzodiazepine", "warning": "Short-term only, prescription required"},
+            {"name": "Clonotril / Lonazep (Clonazepam)", "dosage": "0.5-2mg", "frequency": "Twice daily", "category": "Benzodiazepine", "warning": "Longer acting, prescription required"},
+            {"name": "Valium / Calmpose (Diazepam)", "dosage": "2-10mg", "frequency": "2-4 times daily", "category": "Benzodiazepine", "warning": "Long half-life, prescription required"},
+        ],
+        "otc_stress_relief": [
+            {"name": "Ashwagandha (Ashvagandha)", "dosage": "300-600mg", "frequency": "Once or twice daily", "category": "Herbal Adaptogen", "warning": "OTC, may take 2-4 weeks for full effect"},
+            {"name": "Brahmi (Bacopa)", "dosage": "300-450mg", "frequency": "Once daily", "category": "Herbal Nootropic", "warning": "OTC, helps with memory and stress"},
+            {"name": "L-Theanine", "dosage": "100-200mg", "frequency": "As needed", "category": "Amino Acid", "warning": "OTC, promotes relaxation without drowsiness"},
+            {"name": "Magnesium Glycinate", "dosage": "200-400mg", "frequency": "At bedtime", "category": "Mineral Supplement", "warning": "OTC, helps with relaxation and sleep"},
+            {"name": "Himalaya Stress Care / Tentex Forte", "dosage": "As directed", "frequency": "Twice daily", "category": "Herbal Supplement", "warning": "OTC, Ayurvedic stress relief"},
         ],
         "sleep": [
-            {"name": "Zolpidem (Ambien)", "dosage": "5-10mg", "frequency": "At bedtime", "category": "Z-Drug", "warning": "Short-term only, complex behaviors"},
-            {"name": "Eszopiclone (Lunesta)", "dosage": "1-3mg", "frequency": "At bedtime", "category": "Z-Drug", "warning": "Metallic taste"},
+            {"name": "Zolfresh / Ambien (Zolpidem)", "dosage": "5-10mg", "frequency": "At bedtime", "category": "Z-Drug", "warning": "Short-term only, complex behaviors, prescription required"},
+            {"name": "Lunesta (Eszopiclone)", "dosage": "1-3mg", "frequency": "At bedtime", "category": "Z-Drug", "warning": "Metallic taste, prescription required"},
             {"name": "Melatonin", "dosage": "0.5-5mg", "frequency": "30-60 min before bed", "category": "Hormone", "warning": "OTC, start low"},
-            {"name": "Diphenhydramine", "dosage": "25-50mg", "frequency": "At bedtime", "category": "Antihistamine", "warning": "OTC, tolerance develops"},
+            {"name": "Benadryl / Avil (Diphenhydramine)", "dosage": "25-50mg", "frequency": "At bedtime", "category": "Antihistamine", "warning": "OTC, tolerance develops"},
         ]
     },
 

@@ -150,6 +150,57 @@ class ConversationMemory:
             "belly pain": "stomach pain",
             "head ache": "headache",
             "headach": "headache",
+            # Loose motion variations -> diarrhea
+            "loose motion": "diarrhea",
+            "loose motions": "diarrhea",
+            "loose stool": "diarrhea",
+            "loose stools": "diarrhea",
+            "watery stool": "diarrhea",
+            "watery stools": "diarrhea",
+            "running stomach": "diarrhea",
+            "runny stomach": "diarrhea",
+            "upset stomach": "diarrhea",
+            "dysentery": "diarrhea",
+            # Fever variations
+            "high temperature": "fever",
+            "temperature": "fever",
+            "pyrexia": "fever",
+            # Cold variations
+            "common cold": "cold",
+            "running nose": "cold",
+            # Anxiety variations
+            "anxious": "anxiety",
+            "worried": "anxiety",
+            "panic": "anxiety",
+            "nervous": "anxiety",
+            # Tamil romanized symptoms
+            "vomit varuthu": "nausea",
+            "vomiting varuthu": "nausea",
+            "vomit varala": "nausea",
+            "vanthi": "vomiting",
+            "vanthi varuthu": "vomiting",
+            "thalai vali": "headache",
+            "thalai valikiradu": "headache",
+            "talaivali": "headache",
+            "vayiru vali": "stomach pain",
+            "vayiru valikkuthu": "stomach pain",
+            "kaichal": "fever",
+            "kaichal varuthu": "fever",
+            "juram": "fever",
+            "sali": "cold",
+            "mookkadaippu": "cold",
+            "irumal": "cough",
+            "thontai vali": "sore throat",
+            "valikkuthu": "pain",
+            "ennaku": "",  # Remove filler word
+            # Hindi romanized symptoms
+            "ulti": "vomiting",
+            "ulti aa rahi": "vomiting",
+            "sir dard": "headache",
+            "pet dard": "stomach pain",
+            "bukhar": "fever",
+            "khansi": "cough",
+            "gala dard": "sore throat",
         }
         
         message_lower = message.lower()
@@ -427,9 +478,9 @@ class MedicalReasoningEngine:
             "allergy": {"conditions": ["allergy"], "preferred_subcats": ["non_sedating", "antihistamines"]},
             "rash": {"conditions": ["allergy", "skin"], "preferred_subcats": ["topical", "antihistamines"]},
             "itching": {"conditions": ["allergy", "skin"], "preferred_subcats": ["topical", "antihistamines"]},
-            "anxiety": {"conditions": ["mental_health"], "preferred_subcats": []},
-            "stress": {"conditions": ["mental_health"], "preferred_subcats": []},
-            "insomnia": {"conditions": ["mental_health"], "preferred_subcats": []},
+            "anxiety": {"conditions": ["mental_health"], "preferred_subcats": ["otc_stress_relief", "anxiolytics"]},
+            "stress": {"conditions": ["mental_health"], "preferred_subcats": ["otc_stress_relief"]},
+            "insomnia": {"conditions": ["mental_health"], "preferred_subcats": ["sleep", "otc_stress_relief"]},
             "infection": {"conditions": ["antibiotics"], "preferred_subcats": []},
         }
         
@@ -479,7 +530,8 @@ class MedicalReasoningEngine:
                         all_safe_subcats = ['mild_to_moderate', 'adults', 'non_sedating', 'otc', 'topical', 
                                            'antacids', 'antispasmodics', 'antiemetics', 'antidiarrheal',
                                            'decongestants', 'antihistamines', 'antitussives', 'expectorants',
-                                           'laxatives', 'h2_blockers', 'ppi', 'lozenges', 'antiseptics']
+                                           'laxatives', 'h2_blockers', 'ppi', 'lozenges', 'antiseptics',
+                                           'otc_stress_relief', 'sleep']
                         
                         # First, try preferred subcategories for this symptom
                         subcats_to_try = preferred_subcats + [s for s in all_safe_subcats if s not in preferred_subcats]
@@ -528,8 +580,9 @@ class MedicalReasoningEngine:
                                 seen_meds.add(med["name"])
         
         # Smart selection: ensure each symptom is represented
-        # Return max 6 pharma + 2 natural = 8 total (more comprehensive)
-        final_medications = medications[:6] + remedies[:2]
+        # Allow 2 meds per symptom, up to 10 pharma + 2 natural for multi-symptom cases
+        max_pharma = min(10, 2 * len(symptoms) + 2)  # Scale with symptom count
+        final_medications = medications[:max_pharma] + remedies[:2]
         
         # Enrich with official database information (WHO ATC classification)
         if HAS_DRUG_DATABASE:
@@ -934,6 +987,22 @@ NO long explanations. Action first."""
         """Clean up AI-generated response text"""
         import re
         
+        # Remove instruction echoing (AI sometimes repeats instructions)
+        instruction_patterns = [
+            r'Acknowledge their concern\..*?(?=\n|$)',
+            r'Ask clarifying questions\..*?(?=\n|$)',
+            r'Provide possible explanations\..*?(?=\n|$)',
+            r'\(?\d+\s*(?:sentence|sentences?|word|words?)\)?\.?',
+            r'INSTRUCTION:.*?(?=\n\n|$)',
+            r'REMEMBER:.*?(?=\n\n|$)',
+            r'Your approach:.*?(?=\n\n|$)',
+            r'DO NOT:.*?(?=\n|$)',
+            r'Provide:.*?(?=\n\n|$)',
+            r'Be professional but warm\..*?(?=\n|$)',
+        ]
+        for pattern in instruction_patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+        
         # Remove placeholders like [Name], [Patient's response], etc.
         text = re.sub(r'\[(?:Name|Patient\'s response|Your name|User)\]', '', text)
         
@@ -957,7 +1026,12 @@ NO long explanations. Action first."""
         # Remove any leftover weird artifacts
         text = text.replace('---', '').strip()
         
-        return text.strip()
+        # If the response is too short after cleaning (just whitespace/garbage), provide fallback
+        cleaned = text.strip()
+        if len(cleaned) < 10:
+            return "I'm here to help! How can I assist you with your health concerns today?"
+        
+        return cleaned
 
     def _select_model_and_prompt(
         self, 
@@ -1002,7 +1076,7 @@ NO long explanations. Action first."""
                 options={
                     "temperature": 0.7,
                     "top_p": 0.9,
-                    "num_predict": 512  # Keep responses shorter
+                    "num_predict": 200  # Shorter responses for speed
                 }
             )
             english_response = response["message"]["content"]

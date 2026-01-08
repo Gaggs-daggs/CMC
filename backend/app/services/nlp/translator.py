@@ -1,8 +1,7 @@
 """
 Translation Service - Production Level
 Uses Meta's NLLB-200 transformer for natural, conversational translations
-
-NO GOOGLE TRANSLATE - Pure transformer-based translation
+Falls back to Google Translate if NLLB is not available
 
 Supports all 22 scheduled Indian languages with:
 - Natural conversational tone (not literal/mechanical)
@@ -20,6 +19,15 @@ import hashlib
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Try to import Google Translate as fallback
+GOOGLE_TRANSLATE_AVAILABLE = False
+try:
+    from deep_translator import GoogleTranslator as GoogleTranslator
+    GOOGLE_TRANSLATE_AVAILABLE = True
+    logger.info("✅ Google Translate (deep-translator) available as fallback")
+except ImportError:
+    logger.warning("Google Translate not available (install deep-translator)")
 
 # Try to import NLLB service
 try:
@@ -63,8 +71,8 @@ except ImportError as e:
 
 class TranslationService:
     """
-    Production-level translation service using NLLB-200 transformer ONLY.
-    NO Google Translate fallback - pure transformer quality.
+    Production-level translation service using NLLB-200 transformer.
+    Falls back to Google Translate if NLLB is not available.
     
     Speed optimizations:
     - Pre-cached common medical phrases (instant)
@@ -78,21 +86,35 @@ class TranslationService:
         self._cache = {}
         self._supported_languages = INDIAN_LANGUAGES
         self._nllb = None
+        self._google_translator = None
         
         # Initialize NLLB if available
         if NLLB_AVAILABLE:
             try:
                 self._nllb = get_nllb_service()
                 if self._nllb.is_available():
-                    logger.info("✅ TranslationService using NLLB-200 transformer (NO Google)")
+                    logger.info("✅ TranslationService using NLLB-200 transformer")
                 else:
-                    logger.warning("⚠️ NLLB model not loaded - translations will return original text")
+                    logger.warning("⚠️ NLLB model not loaded")
             except Exception as e:
                 logger.error(f"Failed to initialize NLLB: {e}")
+        
+        # Initialize Google Translate fallback
+        if not self.is_using_transformer() and GOOGLE_TRANSLATE_AVAILABLE:
+            try:
+                # deep-translator uses class instantiation per translation
+                self._google_translator = True  # Flag to indicate availability
+                logger.info("✅ TranslationService using Google Translate fallback")
+            except Exception as e:
+                logger.error(f"Failed to initialize Google Translate: {e}")
     
     def is_using_transformer(self) -> bool:
         """Check if using NLLB transformer"""
         return self._nllb is not None and self._nllb.is_available()
+    
+    def is_using_google(self) -> bool:
+        """Check if using Google Translate fallback"""
+        return self._google_translator is not None and GOOGLE_TRANSLATE_AVAILABLE
     
     def get_supported_languages(self) -> Dict:
         """Get all supported Indian languages"""
@@ -161,9 +183,18 @@ class TranslationService:
                     preserve_medical=preserve_medical
                 )
                 logger.info(f"✅ NLLB: {src_lang} -> {target_language}")
+            elif self.is_using_google():
+                # Use Google Translate fallback (deep-translator)
+                try:
+                    translator = GoogleTranslator(source=src_lang, target=target_language)
+                    translated_text = translator.translate(text)
+                    logger.info(f"✅ Google Translate: {src_lang} -> {target_language}")
+                except Exception as ge:
+                    logger.error(f"Google Translate failed: {ge}")
+                    translated_text = text
             else:
-                # No fallback - return original text
-                logger.warning(f"NLLB not available, returning original text")
+                # No translator available - return original text
+                logger.warning(f"No translator available, returning original text")
                 translated_text = text
             
             # Cache result locally
@@ -258,6 +289,8 @@ class TranslationService:
         """Get the name of the translation engine being used"""
         if self.is_using_transformer():
             return "NLLB-200 (Meta's No Language Left Behind)"
+        elif self.is_using_google():
+            return "Google Translate"
         return "None (translations disabled)"
 
 

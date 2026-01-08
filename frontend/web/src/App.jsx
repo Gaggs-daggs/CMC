@@ -683,7 +683,8 @@ export default function App() {
         return
       }
       
-      const txt = data.response || 'No response'
+      // Use translated response if available, otherwise fall back to English response
+      const txt = data.response_translated || data.response || 'No response'
       setMessages(m => [...m, { 
         role: 'assistant', 
         text: txt, 
