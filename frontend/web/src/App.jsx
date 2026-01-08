@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './App.premium.css'
 import WebGLBackground from './components/WebGLBackground'
+
+// Build version: 2026-01-08-v2 - Translation fix for Tamil responses
+
 import {
   MedicalCrossIcon,
   HeartPulseIcon,
