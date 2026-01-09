@@ -173,34 +173,6 @@ class ConversationMemory:
             "worried": "anxiety",
             "panic": "anxiety",
             "nervous": "anxiety",
-            # Tamil romanized symptoms
-            "vomit varuthu": "nausea",
-            "vomiting varuthu": "nausea",
-            "vomit varala": "nausea",
-            "vanthi": "vomiting",
-            "vanthi varuthu": "vomiting",
-            "thalai vali": "headache",
-            "thalai valikiradu": "headache",
-            "talaivali": "headache",
-            "vayiru vali": "stomach pain",
-            "vayiru valikkuthu": "stomach pain",
-            "kaichal": "fever",
-            "kaichal varuthu": "fever",
-            "juram": "fever",
-            "sali": "cold",
-            "mookkadaippu": "cold",
-            "irumal": "cough",
-            "thontai vali": "sore throat",
-            "valikkuthu": "pain",
-            "ennaku": "",  # Remove filler word
-            # Hindi romanized symptoms
-            "ulti": "vomiting",
-            "ulti aa rahi": "vomiting",
-            "sir dard": "headache",
-            "pet dard": "stomach pain",
-            "bukhar": "fever",
-            "khansi": "cough",
-            "gala dard": "sore throat",
         }
         
         message_lower = message.lower()
@@ -987,40 +959,8 @@ NO long explanations. Action first."""
         """Clean up AI-generated response text"""
         import re
         
-        # Remove instruction echoing (AI sometimes repeats instructions)
-        instruction_patterns = [
-            r'Acknowledge their concern\..*?(?=\n|$)',
-            r'Ask clarifying questions\..*?(?=\n|$)',
-            r'Provide possible explanations\..*?(?=\n|$)',
-            r'\(?\d+\s*(?:sentence|sentences?|word|words?)\)?\.?',
-            r'INSTRUCTION:.*?(?=\n\n|$)',
-            r'REMEMBER:.*?(?=\n\n|$)',
-            r'Your approach:.*?(?=\n\n|$)',
-            r'DO NOT:.*?(?=\n|$)',
-            r'Provide:.*?(?=\n|$)',
-            r'Be professional but warm\..*?(?=\n|$)',
-            # Remove prompt artifacts like "(1-s)", "(2-s)", etc.
-            r'\(\d+-s\)',
-            # Remove meta-instructions about patient/assistant behavior
-            r'\(Patient provides information.*?\)',
-            r'\(Assistant interprets.*?\)',
-            r'\(User responds.*?\)',
-            r'\(Doctor asks.*?\)',
-            r'\(No need for.*?\)',
-            r'\(Optional.*?\)',
-            r'\(Note:.*?\)',
-            # Remove "each)" artifacts
-            r'\beach\)',
-            # Remove standalone timing markers
-            r'\beach\b\s*\)',
-        ]
-        for pattern in instruction_patterns:
-            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
-        
-        # Remove placeholders like [Name], [Patient's response], [j], etc.
-        text = re.sub(r'\[(?:Name|Patient\'s response|Your name|User|j|name|patient)\]', '', text, flags=re.IGNORECASE)
-        # Remove any single-letter placeholders in brackets
-        text = re.sub(r'\[([a-zA-Z])\]', '', text)
+        # Remove placeholders like [Name], [Patient's response], etc.
+        text = re.sub(r'\[(?:Name|Patient\'s response|Your name|User)\]', '', text)
         
         # Remove extra quotes at start/end
         text = text.strip('"\'')
@@ -1042,17 +982,7 @@ NO long explanations. Action first."""
         # Remove any leftover weird artifacts
         text = text.replace('---', '').strip()
         
-        # Clean up double commas or spaces around punctuation
-        text = re.sub(r',\s*,', ',', text)
-        text = re.sub(r'\s+([.,!?])', r'\1', text)
-        text = re.sub(r'([.,!?])\s*([.,!?])', r'\1', text)
-        
-        # If the response is too short after cleaning (just whitespace/garbage), provide fallback
-        cleaned = text.strip()
-        if len(cleaned) < 10:
-            return "I'm here to help! How can I assist you with your health concerns today?"
-        
-        return cleaned
+        return text.strip()
 
     def _select_model_and_prompt(
         self, 
@@ -1097,7 +1027,7 @@ NO long explanations. Action first."""
                 options={
                     "temperature": 0.7,
                     "top_p": 0.9,
-                    "num_predict": 200  # Shorter responses for speed
+                    "num_predict": 512  # Keep responses shorter
                 }
             )
             english_response = response["message"]["content"]

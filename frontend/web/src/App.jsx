@@ -2,9 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './App.premium.css'
 import WebGLBackground from './components/WebGLBackground'
-
-// Build version: 2026-01-08-v2 - Translation fix for Tamil responses
-
 import {
   MedicalCrossIcon,
   HeartPulseIcon,
@@ -686,16 +683,11 @@ export default function App() {
         return
       }
       
-      // DEBUG: Log what we receive from API
-      console.log('🌐 API Response:', {
-        response: data.response?.substring(0, 50),
-        response_translated: data.response_translated?.substring(0, 50),
-        language: data.language
-      })
-      
-      // Use translated response if available, otherwise fall back to English response
+      // Use translated response if available, otherwise fall back to original
       const txt = data.response_translated || data.response || 'No response'
-      console.log('📝 Using text:', txt.substring(0, 50))
+      console.log('Response:', data.response?.substring(0, 100))
+      console.log('Response Translated:', data.response_translated?.substring(0, 100))
+      console.log('Using text:', txt?.substring(0, 100))
       setMessages(m => [...m, { 
         role: 'assistant', 
         text: txt, 
@@ -1220,11 +1212,7 @@ export default function App() {
                       </div>
                       
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.8r                        -- View consultations with user info
-                        SELECT p.name, p.phone_number, c.symptoms, c.ai_response, c.created_at 
-                        FROM consultations c 
-                        JOIN user_profiles p ON c.user_id = p.id 
-                        ORDER BY c.created_at DESC;em', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>Gender</label>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '0.5rem', fontWeight: '500' }}>Gender</label>
                         <select 
                           value={profileForm.gender}
                           onChange={e => setProfileForm(p => ({ ...p, gender: e.target.value }))}
