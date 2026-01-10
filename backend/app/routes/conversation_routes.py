@@ -23,6 +23,13 @@ try:
 except ImportError:
     ORCHESTRATOR_AVAILABLE = False
 
+# Import session helpers for database persistence
+try:
+    from .session_routes import get_or_create_session, save_message_to_session, update_session_symptoms
+    SESSION_STORAGE_AVAILABLE = True
+except ImportError:
+    SESSION_STORAGE_AVAILABLE = False
+
 # Fallback to old service
 from ..services.ai_service_v2 import powerful_ai, get_ai_response
 
@@ -154,6 +161,18 @@ async def start_conversation(request: StartConversationRequest):
             "is_returning_user": is_returning_user
         }
         
+        # Save session to database for sidebar persistence
+        if SESSION_STORAGE_AVAILABLE:
+            try:
+                await get_or_create_session(
+                    user_phone=request.user_id,
+                    session_id=session_id,
+                    language=request.language
+                )
+                logger.info(f"💾 Session saved to database: {session_id}")
+            except Exception as e:
+                logger.warning(f"Could not save session to database: {e}")
+        
         # Get translation engine info
         translation_engine = None
         if ORCHESTRATOR_AVAILABLE:
@@ -228,6 +247,36 @@ async def send_message(request: MessageRequest):
             if result.symptoms_detected:
                 session["symptoms"].extend(result.symptoms_detected)
             
+            # Save messages to database for sidebar persistence
+            if SESSION_STORAGE_AVAILABLE:
+                try:
+                    # Save user message
+                    await save_message_to_session(
+                        session_id=request.session_id,
+                        role="user",
+                        content=request.message
+                    )
+                    # Save assistant response
+                    await save_message_to_session(
+                        session_id=request.session_id,
+                        role="assistant",
+                        content=result.text_translated or result.text,
+                        metadata={
+                            "model_used": result.model_used,
+                            "symptoms": result.symptoms_detected
+                        }
+                    )
+                    # Update symptoms and urgency
+                    if result.symptoms_detected or result.urgency:
+                        await update_session_symptoms(
+                            session_id=request.session_id,
+                            symptoms=result.symptoms_detected or [],
+                            urgency_level=result.urgency
+                        )
+                    logger.info(f"💾 Messages saved to database for session: {request.session_id}")
+                except Exception as e:
+                    logger.warning(f"Could not save messages to database: {e}")
+            
             # Build response with all info
             return MessageResponse(
                 response=result.text,
@@ -283,6 +332,29 @@ async def send_message(request: MessageRequest):
         
         if ai_response.get("symptoms_detected"):
             session["symptoms"].extend(ai_response["symptoms_detected"])
+        
+        # Save messages to database for sidebar persistence (fallback path)
+        if SESSION_STORAGE_AVAILABLE:
+            try:
+                await save_message_to_session(
+                    session_id=request.session_id,
+                    role="user",
+                    content=request.message
+                )
+                await save_message_to_session(
+                    session_id=request.session_id,
+                    role="assistant",
+                    content=ai_response.get("response_translated") or ai_response["response"],
+                    metadata={"symptoms": ai_response.get("symptoms_detected", [])}
+                )
+                if ai_response.get("symptoms_detected") or ai_response.get("urgency_level"):
+                    await update_session_symptoms(
+                        session_id=request.session_id,
+                        symptoms=ai_response.get("symptoms_detected", []),
+                        urgency_level=ai_response.get("urgency_level", "self_care")
+                    )
+            except Exception as e:
+                logger.warning(f"Could not save messages to database: {e}")
         
         # Build triage info
         triage_info = None
