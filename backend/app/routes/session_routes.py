@@ -52,7 +52,8 @@ class SessionDetail(BaseModel):
 
 
 class CreateSessionRequest(BaseModel):
-    user_phone: str
+    user_phone: Optional[str] = None
+    user_id: Optional[str] = None  # Alias for user_phone (frontend compatibility)
     language: str = "en"
     title: Optional[str] = None
 
@@ -64,7 +65,8 @@ class CreateSessionResponse(BaseModel):
 
 
 class ListSessionsRequest(BaseModel):
-    user_phone: str
+    user_phone: Optional[str] = None
+    user_id: Optional[str] = None  # Alias for user_phone (frontend compatibility)
 
 
 class UpdateSessionRequest(BaseModel):
@@ -97,13 +99,18 @@ def generate_session_title(messages: List[Dict]) -> str:
     return "New Chat"
 
 
-@router.post("/list", response_model=List[SessionSummary])
+@router.post("/list")
 async def list_sessions(request: ListSessionsRequest):
     """
     List all sessions for a user (for sidebar)
     Returns sessions sorted by last updated (most recent first)
     """
-    sessions = get_user_sessions(request.user_phone)
+    # Accept either user_phone or user_id
+    phone = request.user_phone or request.user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+    
+    sessions = get_user_sessions(phone)
     
     summaries = []
     for session_id, session_data in sessions.items():
@@ -127,22 +134,27 @@ async def list_sessions(request: ListSessionsRequest):
     # Sort by updated_at descending
     summaries.sort(key=lambda x: x.updated_at, reverse=True)
     
-    return summaries
+    return {"success": True, "sessions": summaries}
 
 
-@router.post("/create", response_model=CreateSessionResponse)
+@router.post("/create")
 async def create_session(request: CreateSessionRequest):
     """
     Create a new conversation session
     """
+    # Accept either user_phone or user_id
+    phone = request.user_phone or request.user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+    
     session_id = str(uuid.uuid4())
     now = datetime.now()
     
-    sessions = get_user_sessions(request.user_phone)
+    sessions = get_user_sessions(phone)
     
     sessions[session_id] = {
         "session_id": session_id,
-        "user_phone": request.user_phone,
+        "user_phone": phone,
         "title": request.title or "New Chat",
         "created_at": now,
         "updated_at": now,
@@ -153,46 +165,60 @@ async def create_session(request: CreateSessionRequest):
         "is_archived": False
     }
     
-    logger.info(f"Created new session {session_id} for user {request.user_phone}")
+    logger.info(f"Created new session {session_id} for user {phone}")
     
-    return CreateSessionResponse(
-        session_id=session_id,
-        title=sessions[session_id]["title"],
-        created_at=now
-    )
+    return {
+        "success": True,
+        "session": {
+            "session_id": session_id,
+            "title": sessions[session_id]["title"],
+            "created_at": now.isoformat()
+        }
+    }
 
 
-@router.get("/{session_id}", response_model=SessionDetail)
-async def get_session(session_id: str, user_phone: str):
+@router.get("/{session_id}")
+async def get_session(session_id: str, user_id: Optional[str] = None, user_phone: Optional[str] = None):
     """
     Get full session details including all messages
     """
-    sessions = get_user_sessions(user_phone)
+    phone = user_phone or user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+        
+    sessions = get_user_sessions(phone)
     
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
     session_data = sessions[session_id]
     
-    return SessionDetail(
-        session_id=session_id,
-        user_phone=user_phone,
-        title=session_data.get("title", "Chat"),
-        created_at=session_data.get("created_at", datetime.now()),
-        updated_at=session_data.get("updated_at", datetime.now()),
-        messages=session_data.get("messages", []),
-        symptoms=session_data.get("symptoms", []),
-        urgency_level=session_data.get("urgency_level", "self_care"),
-        language=session_data.get("language", "en")
-    )
+    return {
+        "success": True,
+        "session": {
+            "session_id": session_id,
+            "user_phone": phone,
+            "title": session_data.get("title", "Chat"),
+            "created_at": session_data.get("created_at", datetime.now()).isoformat() if isinstance(session_data.get("created_at"), datetime) else session_data.get("created_at"),
+            "updated_at": session_data.get("updated_at", datetime.now()).isoformat() if isinstance(session_data.get("updated_at"), datetime) else session_data.get("updated_at"),
+            "messages": session_data.get("messages", []),
+            "symptoms": session_data.get("symptoms", []),
+            "urgency_level": session_data.get("urgency_level", "self_care"),
+            "language": session_data.get("language", "en")
+        }
+    }
 
 
 @router.put("/{session_id}")
-async def update_session(session_id: str, user_phone: str, request: UpdateSessionRequest):
+async def update_session(session_id: str, user_id: Optional[str] = None, user_phone: Optional[str] = None, request: UpdateSessionRequest = None):
     """
     Update session (title, archive status)
     """
-    sessions = get_user_sessions(user_phone)
+    phone = user_phone or user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+        
+    sessions = get_user_sessions(phone)
     
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -209,11 +235,15 @@ async def update_session(session_id: str, user_phone: str, request: UpdateSessio
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str, user_phone: str):
+async def delete_session(session_id: str, user_id: Optional[str] = None, user_phone: Optional[str] = None):
     """
     Delete a session (or archive it)
     """
-    sessions = get_user_sessions(user_phone)
+    phone = user_phone or user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+        
+    sessions = get_user_sessions(phone)
     
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -224,15 +254,19 @@ async def delete_session(session_id: str, user_phone: str):
     
     logger.info(f"Archived session {session_id}")
     
-    return {"status": "archived", "session_id": session_id}
+    return {"success": True, "status": "archived", "session_id": session_id}
 
 
 @router.post("/{session_id}/message")
-async def add_message(session_id: str, user_phone: str, request: AddMessageRequest):
+async def add_message(session_id: str, user_id: Optional[str] = None, user_phone: Optional[str] = None, request: AddMessageRequest = None):
     """
     Add a message to a session (used internally)
     """
-    sessions = get_user_sessions(user_phone)
+    phone = user_phone or user_id
+    if not phone:
+        raise HTTPException(status_code=400, detail="user_phone or user_id required")
+        
+    sessions = get_user_sessions(phone)
     
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
