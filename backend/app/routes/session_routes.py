@@ -18,9 +18,18 @@ from datetime import datetime
 import uuid
 import logging
 
-from ..utils.database import db
-
 logger = logging.getLogger(__name__)
+
+# Try PostgreSQL first, fallback to in-memory
+try:
+    from ..services.database.postgres_session_service import postgres_session_service
+    POSTGRES_SESSIONS_AVAILABLE = True
+    logger.info("✅ Using PostgreSQL for session storage")
+except ImportError:
+    POSTGRES_SESSIONS_AVAILABLE = False
+    logger.warning("⚠️ PostgreSQL sessions not available, using in-memory")
+
+from ..utils.database import db
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -87,6 +96,16 @@ async def list_sessions(request: ListSessionsRequest):
     if not phone:
         raise HTTPException(status_code=400, detail="user_phone or user_id required")
     
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            sessions = postgres_session_service.list_sessions(phone)
+            return {"success": True, "sessions": sessions}
+        except Exception as e:
+            logger.error(f"PostgreSQL list_sessions failed: {e}")
+            # Fall through to in-memory
+    
+    # Fallback to in-memory
     database = get_database()
     
     # Find all sessions for this user
@@ -142,6 +161,21 @@ async def create_session(request: CreateSessionRequest):
     if not phone:
         raise HTTPException(status_code=400, detail="user_phone or user_id required")
     
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            session = postgres_session_service.create_session(
+                phone_number=phone,
+                language=request.language,
+                title=request.title or "New Chat"
+            )
+            logger.info(f"✅ Created PostgreSQL session {session['session_id']} for {phone}")
+            return {"success": True, "session": session}
+        except Exception as e:
+            logger.error(f"PostgreSQL create_session failed: {e}")
+            # Fall through to in-memory
+    
+    # Fallback to in-memory
     session_id = str(uuid.uuid4())
     now = datetime.now()
     
@@ -183,6 +217,19 @@ async def get_session(session_id: str, user_id: Optional[str] = None, user_phone
     if not phone:
         raise HTTPException(status_code=400, detail="user_phone or user_id required")
     
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            session_data = postgres_session_service.get_session(session_id, phone)
+            if session_data:
+                return {"success": True, "session": session_data}
+            raise HTTPException(status_code=404, detail="Session not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"PostgreSQL get_session failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     session_data = await database.sessions.find_one({"session_id": session_id, "user_phone": phone})
     
@@ -222,6 +269,18 @@ async def update_session(session_id: str, request: UpdateSessionRequest, user_id
     if not phone:
         raise HTTPException(status_code=400, detail="user_phone or user_id required")
     
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            if request.title is not None:
+                postgres_session_service.update_session_title(session_id, request.title, phone)
+            if request.is_archived:
+                postgres_session_service.archive_session(session_id, phone)
+            return {"success": True, "status": "updated", "session_id": session_id}
+        except Exception as e:
+            logger.error(f"PostgreSQL update_session failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     
     update_data = {"updated_at": datetime.now()}
@@ -250,6 +309,20 @@ async def delete_session(session_id: str, user_id: Optional[str] = None, user_ph
     if not phone:
         raise HTTPException(status_code=400, detail="user_phone or user_id required")
     
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            archived = postgres_session_service.archive_session(session_id, phone)
+            if archived:
+                logger.info(f"📦 Archived PostgreSQL session {session_id}")
+                return {"success": True, "status": "archived", "session_id": session_id}
+            raise HTTPException(status_code=404, detail="Session not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"PostgreSQL delete_session failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     
     result = await database.sessions.update_one(
@@ -274,6 +347,19 @@ async def get_or_create_session(user_phone: str, session_id: str = None, languag
     Get existing session or create new one
     Used by conversation routes to link messages to sessions
     """
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            if session_id:
+                session = postgres_session_service.get_session(session_id, user_phone)
+                if session:
+                    return session
+            # Create new session with provided session_id (or generate new one)
+            return postgres_session_service.create_session(user_phone, language, "New Chat", session_id)
+        except Exception as e:
+            logger.error(f"PostgreSQL get_or_create_session failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     
     if session_id:
@@ -310,6 +396,17 @@ async def save_message_to_session(session_id: str, role: str, content: str, meta
     Save a message to the session
     Called after each conversation turn
     """
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            success = postgres_session_service.add_message(session_id, role, content, metadata)
+            if success:
+                logger.debug(f"💾 Saved message to PostgreSQL session {session_id}")
+            return success
+        except Exception as e:
+            logger.error(f"PostgreSQL save_message failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     
     message = {
@@ -345,6 +442,17 @@ async def update_session_symptoms(session_id: str, symptoms: List[str], urgency_
     """
     Update session with detected symptoms and urgency
     """
+    # Use PostgreSQL if available
+    if POSTGRES_SESSIONS_AVAILABLE:
+        try:
+            postgres_session_service.update_session_symptoms(session_id, symptoms, urgency_level)
+            # Also generate smart title based on symptoms
+            postgres_session_service.generate_smart_title(session_id)
+            return
+        except Exception as e:
+            logger.error(f"PostgreSQL update_symptoms failed: {e}")
+            # Fall through to in-memory
+    
     database = get_database()
     
     update_data = {"updated_at": datetime.now()}

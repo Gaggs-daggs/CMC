@@ -2045,10 +2045,19 @@ export default function App() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="medications-header" onClick={() => setMedsExpanded(!medsExpanded)}>
-                <PillIconComponent />
-                <span>Suggested Medications ({suggestedMeds.length})</span>
-                <span className="expand-icon">{medsExpanded ? '▲' : '▼'}</span>
+              <div className="medications-header">
+                <div className="meds-header-left" onClick={() => setMedsExpanded(!medsExpanded)}>
+                  <PillIconComponent />
+                  <span>Suggested Medications ({suggestedMeds.length})</span>
+                  <span className="expand-icon">{medsExpanded ? '▲' : '▼'}</span>
+                </div>
+                <button 
+                  className="meds-close-btn"
+                  onClick={() => setSuggestedMeds([])}
+                  title="Close medications panel"
+                >
+                  <XIcon />
+                </button>
               </div>
               <div className="medications-list">
                 {(medsExpanded ? suggestedMeds : suggestedMeds.slice(0, 4)).map((med, i) => (
@@ -2122,7 +2131,18 @@ export default function App() {
                       <div className="user-message-text">{m.text}</div>
                     )}
                     
-                    <div className="message-time">{formatTime(m.time)}</div>
+                    <div className="message-footer">
+                      <div className="message-time">{formatTime(m.time)}</div>
+                      {m.role === 'assistant' && (
+                        <button 
+                          className="message-speak-btn"
+                          onClick={() => speak(m.text)}
+                          title="Read aloud"
+                        >
+                          <VolumeIcon />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {m.role === 'user' && <div className="message-avatar"><UserIcon /></div>}
                 </div>

@@ -40,6 +40,15 @@ except ImportError:
     HAS_DRUG_DATABASE = False
     logger.warning("Medical database services not available - drug enrichment disabled")
 
+# Import symptom normalizer for comprehensive symptom detection
+try:
+    from app.services.symptom_normalizer import symptom_normalizer, normalize_symptoms
+    HAS_SYMPTOM_NORMALIZER = True
+    logger.info("✅ Symptom normalizer loaded with 1000+ variations")
+except ImportError:
+    HAS_SYMPTOM_NORMALIZER = False
+    logger.warning("Symptom normalizer not available - using basic matching")
+
 
 class ModelType(str, Enum):
     """Available AI models"""
@@ -128,7 +137,17 @@ class ConversationMemory:
         return self.get_conversation_text(session_id)
     
     def track_symptoms(self, session_id: str, message: str):
-        """Extract and track symptoms from a message - clean keywords only"""
+        """Extract and track symptoms from a message using comprehensive normalizer"""
+        
+        # Use comprehensive symptom normalizer if available
+        if HAS_SYMPTOM_NORMALIZER:
+            found_symptoms = normalize_symptoms(message)
+            if found_symptoms:
+                self.add_symptoms(session_id, found_symptoms)
+                logger.info(f"🔍 Normalized symptoms: {found_symptoms} -> Total: {self.get_all_symptoms(session_id)}")
+            return
+        
+        # Fallback to basic matching if normalizer not available
         # Common symptom keywords to track - no generic words like "pain" or "ache"
         symptom_keywords = [
             "headache", "migraine", "fever", "chills", "sweating",
@@ -150,6 +169,11 @@ class ConversationMemory:
             "belly pain": "stomach pain",
             "head ache": "headache",
             "headach": "headache",
+            # Migraine variations
+            "migrain": "migraine",
+            "migranes": "migraine",
+            "migrane": "migraine",
+            "migraines": "migraine",
             # Loose motion variations -> diarrhea
             "loose motion": "diarrhea",
             "loose motions": "diarrhea",
@@ -165,14 +189,22 @@ class ConversationMemory:
             "high temperature": "fever",
             "temperature": "fever",
             "pyrexia": "fever",
+            "feverish": "fever",
             # Cold variations
             "common cold": "cold",
             "running nose": "cold",
+            "runny nose": "cold",
             # Anxiety variations
             "anxious": "anxiety",
             "worried": "anxiety",
             "panic": "anxiety",
             "nervous": "anxiety",
+            # Cough variations
+            "coughing": "cough",
+            "khansi": "cough",
+            # Body ache variations
+            "body aches": "body ache",
+            "bodyache": "body ache",
         }
         
         message_lower = message.lower()
@@ -358,6 +390,14 @@ class MedicalReasoningEngine:
             {"name": "Paracetamol", "dosage": "500mg", "frequency": "Every 4-6 hours", "warning": "Max 4g/day"},
             {"name": "Ibuprofen", "dosage": "400mg", "frequency": "Every 6-8 hours", "warning": "Take with food"}
         ],
+        "migraine": [
+            {"name": "Paracetamol", "dosage": "1000mg", "frequency": "At onset", "warning": "Take early for best effect"},
+            {"name": "Ibuprofen", "dosage": "400-600mg", "frequency": "At onset", "warning": "Take with food, works best early"},
+            {"name": "Aspirin", "dosage": "900-1000mg", "frequency": "At onset", "warning": "Not for children, take with food"},
+            {"name": "Excedrin Migraine", "dosage": "2 tablets", "frequency": "At onset", "warning": "Contains caffeine"},
+            {"name": "Dark room rest", "dosage": "Lie down", "frequency": "During attack", "warning": "Natural remedy"},
+            {"name": "Cold compress", "dosage": "On forehead/neck", "frequency": "15-20 mins", "warning": "Natural remedy"}
+        ],
         "fever": [
             {"name": "Paracetamol", "dosage": "500-650mg", "frequency": "Every 4-6 hours", "warning": "Stay hydrated"},
             {"name": "Ibuprofen", "dosage": "400mg", "frequency": "Every 6-8 hours", "warning": "Not for children"}
@@ -442,10 +482,14 @@ class MedicalReasoningEngine:
             "runny nose": {"conditions": ["respiratory"], "preferred_subcats": ["antihistamines", "decongestants"]},
             "congestion": {"conditions": ["respiratory"], "preferred_subcats": ["decongestants"]},
             "headache": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate"]},
+            "migraine": {"conditions": ["pain", "migraine"], "preferred_subcats": ["mild_to_moderate", "migraine_otc"]},
             "body ache": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate", "topical"]},
             "back pain": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate", "topical"]},
             "joint pain": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate", "topical"]},
             "muscle pain": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate", "topical"]},
+            "neck pain": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate", "topical"]},
+            "toothache": {"conditions": ["pain"], "preferred_subcats": ["mild_to_moderate"]},
+            "ear pain": {"conditions": ["pain", "ent"], "preferred_subcats": ["mild_to_moderate"]},
             "fever": {"conditions": ["fever"], "preferred_subcats": ["adults"]},
             "allergy": {"conditions": ["allergy"], "preferred_subcats": ["non_sedating", "antihistamines"]},
             "rash": {"conditions": ["allergy", "skin"], "preferred_subcats": ["topical", "antihistamines"]},
@@ -453,6 +497,10 @@ class MedicalReasoningEngine:
             "anxiety": {"conditions": ["mental_health"], "preferred_subcats": ["otc_stress_relief", "anxiolytics"]},
             "stress": {"conditions": ["mental_health"], "preferred_subcats": ["otc_stress_relief"]},
             "insomnia": {"conditions": ["mental_health"], "preferred_subcats": ["sleep", "otc_stress_relief"]},
+            "depression": {"conditions": ["mental_health"], "preferred_subcats": ["otc_stress_relief"]},
+            "dizziness": {"conditions": ["vertigo"], "preferred_subcats": ["antiemetics"]},
+            "fatigue": {"conditions": ["general"], "preferred_subcats": ["vitamins", "supplements"]},
+            "weakness": {"conditions": ["general"], "preferred_subcats": ["vitamins", "supplements"]},
             "infection": {"conditions": ["antibiotics"], "preferred_subcats": []},
         }
         

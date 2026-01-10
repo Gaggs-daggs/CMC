@@ -222,6 +222,30 @@ async def start_conversation(request: StartConversationRequest):
 async def send_message(request: MessageRequest):
     try:
         session = sessions.get(request.session_id)
+        
+        # If session not in memory, try to load from PostgreSQL
+        if not session and SESSION_STORAGE_AVAILABLE:
+            try:
+                db_session = await get_or_create_session(
+                    user_phone="",  # Will be fetched from DB
+                    session_id=request.session_id,
+                    language=request.language
+                )
+                if db_session:
+                    # Restore session to in-memory dict
+                    sessions[request.session_id] = {
+                        "user_id": db_session.get("user_phone") or db_session.get("phone_number", ""),
+                        "phone_number": db_session.get("user_phone") or db_session.get("phone_number", ""),
+                        "language": db_session.get("language", request.language),
+                        "messages": db_session.get("messages", []),
+                        "symptoms": db_session.get("symptoms", []),
+                        "is_returning_user": True
+                    }
+                    session = sessions[request.session_id]
+                    logger.info(f"🔄 Restored session from database: {request.session_id}")
+            except Exception as e:
+                logger.warning(f"Could not restore session from database: {e}")
+        
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         

@@ -3,6 +3,7 @@ Drug/Medication Routes
 - OTC medication suggestions
 - Drug interaction checker
 - Official drug database lookups (RxNorm, DailyMed, WHO ATC)
+- Enhanced medicine enrichment with ALL databases
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -23,6 +24,18 @@ try:
     HAS_DRUG_DATABASE = True
 except ImportError:
     HAS_DRUG_DATABASE = False
+
+# Import enhanced medicine service
+try:
+    from ..services.enhanced_medicine_service import (
+        enhanced_medicine_service,
+        enrich_medicine,
+        enrich_medications,
+        get_quick_medicines
+    )
+    HAS_ENHANCED_MEDICINE = True
+except ImportError:
+    HAS_ENHANCED_MEDICINE = False
 
 router = APIRouter(prefix="/drugs", tags=["medications"])
 logger = logging.getLogger(__name__)
@@ -254,4 +267,219 @@ async def enrich_medication_list(medications: List[dict]):
     except Exception as e:
         logger.error(f"Medication enrichment error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Enhanced Medicine Service Endpoints
+# Uses ALL available databases for comprehensive info
+# ============================================
+
+class EnhancedMedicineRequest(BaseModel):
+    name: str
+    include_safety: bool = True
+    user_allergies: Optional[List[str]] = []
+
+
+class SymptomMedicinesRequest(BaseModel):
+    symptoms: List[str]
+    max_per_symptom: int = 2
+    user_allergies: Optional[List[str]] = []
+
+
+@router.get("/enhanced/{drug_name}")
+async def get_enhanced_drug_info(drug_name: str, include_safety: bool = True):
+    """
+    Get COMPREHENSIVE drug information from ALL available databases
+    
+    Sources combined:
+    - Indian Medicine Database (local, fast)
+    - Comprehensive Drug Database (local, fast)
+    - WHO ATC Classification (local, fast)
+    - RxNorm (NIH) - Drug normalization
+    - DailyMed (FDA) - Safety labels
+    
+    Returns:
+    - Full composition with ingredients and strengths
+    - Generic and brand names
+    - Drug classification (ATC code)
+    - Dosage and administration
+    - Safety warnings and contraindications
+    - Side effects
+    - Alternative medicines
+    - Indian brand names and prices
+    - Verification status and confidence score
+    
+    - **drug_name**: Name of the drug (brand or generic)
+    - **include_safety**: Whether to include FDA safety info (default: True)
+    """
+    if not HAS_ENHANCED_MEDICINE:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced medicine service not available"
+        )
+    
+    try:
+        enriched = await enhanced_medicine_service.enrich_medicine(
+            {"name": drug_name},
+            include_safety=include_safety
+        )
+        return enriched.to_dict()
+    except Exception as e:
+        logger.error(f"Enhanced drug info error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/enhanced/enrich")
+async def enhanced_enrich_medications(request: EnhancedMedicineRequest):
+    """
+    Enrich a single medication with ALL available database information
+    
+    - **name**: Drug name to enrich
+    - **include_safety**: Whether to fetch FDA safety info
+    - **user_allergies**: List of user's allergies for warnings
+    """
+    if not HAS_ENHANCED_MEDICINE:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced medicine service not available"
+        )
+    
+    try:
+        enriched = await enhanced_medicine_service.enrich_medicine(
+            {"name": request.name},
+            include_safety=request.include_safety,
+            user_allergies=request.user_allergies
+        )
+        return enriched.to_dict()
+    except Exception as e:
+        logger.error(f"Enhanced enrichment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/enhanced/batch")
+async def enhanced_enrich_batch(
+    medications: List[dict],
+    include_safety: bool = True,
+    user_allergies: Optional[List[str]] = None
+):
+    """
+    Enrich multiple medications with ALL available databases
+    
+    - **medications**: List of medication objects with 'name' field
+    - **include_safety**: Whether to include FDA safety info
+    - **user_allergies**: User's allergies for personalized warnings
+    """
+    if not HAS_ENHANCED_MEDICINE:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced medicine service not available"
+        )
+    
+    try:
+        enriched = await enrich_medications(
+            medications,
+            include_safety=include_safety
+        )
+        
+        # Add allergy warnings if provided
+        if user_allergies:
+            for med in enriched:
+                med_name = (med.get("name", "") or "").lower()
+                generic = (med.get("generic_name", "") or "").lower()
+                for allergen in user_allergies:
+                    allergen_lower = allergen.lower()
+                    if allergen_lower in med_name or allergen_lower in generic:
+                        if "warnings" not in med:
+                            med["warnings"] = []
+                        med["warnings"].insert(0, f"⚠️ ALLERGY WARNING: Contains {allergen}")
+        
+        return {
+            "medications": enriched,
+            "total": len(enriched),
+            "verified_count": sum(1 for m in enriched if m.get("verified")),
+            "sources_used": list(set(
+                source for m in enriched for source in m.get("sources", [])
+            ))
+        }
+    except Exception as e:
+        logger.error(f"Enhanced batch enrichment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/for-symptoms")
+async def get_medicines_for_symptoms(request: SymptomMedicinesRequest):
+    """
+    Get medicines for symptoms (fast, local database lookup)
+    
+    This endpoint is FAST - uses only local databases, no API calls.
+    Perfect for quick symptom-based medicine suggestions.
+    
+    - **symptoms**: List of symptoms (e.g., ["headache", "fever"])
+    - **max_per_symptom**: Maximum medicines per symptom (default: 2)
+    - **user_allergies**: User's allergies to filter medicines
+    """
+    if not HAS_ENHANCED_MEDICINE:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced medicine service not available"
+        )
+    
+    try:
+        medicines = get_quick_medicines(
+            symptoms=request.symptoms,
+            user_allergies=request.user_allergies
+        )
+        
+        return {
+            "symptoms": request.symptoms,
+            "medicines": medicines,
+            "total": len(medicines),
+            "filtered_allergies": request.user_allergies or []
+        }
+    except Exception as e:
+        logger.error(f"Symptom medicines error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/alternatives/{drug_name}")
+async def get_drug_alternatives(drug_name: str):
+    """
+    Get alternative medicines for a drug
+    
+    - **drug_name**: Name of the drug
+    """
+    if not HAS_ENHANCED_MEDICINE:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced medicine service not available"
+        )
+    
+    try:
+        alternatives = enhanced_medicine_service.get_alternatives(drug_name)
+        return {
+            "drug_name": drug_name,
+            "alternatives": alternatives,
+            "count": len(alternatives)
+        }
+    except Exception as e:
+        logger.error(f"Alternatives lookup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/status")
+async def get_drug_services_status():
+    """
+    Get status of all drug database services
+    """
+    return {
+        "drug_database": HAS_DRUG_DATABASE,
+        "enhanced_medicine_service": HAS_ENHANCED_MEDICINE,
+        "services": {
+            "rxnorm": HAS_DRUG_DATABASE,
+            "dailymed": HAS_DRUG_DATABASE,
+            "atc_classification": HAS_DRUG_DATABASE,
+            "indian_medicine_db": HAS_ENHANCED_MEDICINE,
+            "comprehensive_drug_db": HAS_ENHANCED_MEDICINE
+        }
+    }
 

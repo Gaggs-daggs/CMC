@@ -5,136 +5,52 @@ Analyzes skin conditions, wounds, rashes, and other visible symptoms
 import ollama
 import base64
 import logging
+import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
 VISION_MODEL = "llava:7b"
 
-# Specialized prompts for different image types
+# Thread pool for running sync ollama calls
+_executor = ThreadPoolExecutor(max_workers=2)
+
+# OPTIMIZED: Shorter, more focused prompts for faster analysis
 IMAGE_PROMPTS = {
-    "scan": """You are an expert medical imaging AI assistant. Analyze this medical scan (MRI, CT, X-ray, or ultrasound) carefully.
+    "scan": """Analyze this medical scan briefly:
+1. Scan type (MRI/CT/X-ray)
+2. Body region 
+3. Key findings (normal or abnormal)
+4. Urgency: ROUTINE/URGENT/CRITICAL
+5. Recommended specialist
 
-Provide your analysis in this EXACT format:
+Keep response under 200 words. This is preliminary AI analysis only.""",
 
-🔬 **IMAGE TYPE & REGION**
-- Identify the type of scan (MRI, CT scan, X-ray, ultrasound, PET scan)
-- Identify the body region being scanned (brain, chest, abdomen, spine, limb, etc.)
-- Note the imaging plane if applicable (axial, sagittal, coronal)
+    "skin": """Analyze this skin condition briefly:
+1. Describe appearance (size, color, texture)
+2. Top 3 possible conditions
+3. Severity: MILD/MODERATE/SEVERE
+4. Action: HOME CARE / SEE DOCTOR / URGENT
 
-📋 **DETAILED OBSERVATIONS**
-- Describe all visible structures and their appearance
-- Note any abnormalities, lesions, masses, or unusual findings
-- Describe location, size estimates, and characteristics of any findings
-- Compare to expected normal anatomy
+Keep response under 150 words. Consult dermatologist for diagnosis.""",
 
-⚠️ **POTENTIAL FINDINGS**
-List possible conditions that could explain the observations:
-- Finding 1: [condition] - [brief explanation]
-- Finding 2: [condition] - [brief explanation]
-- Finding 3: [condition] - [brief explanation]
+    "wound": """Assess this wound briefly:
+1. Wound type and size estimate
+2. Signs of infection (yes/no)
+3. Severity: MINOR/MODERATE/SEVERE
+4. Care needed: HOME / CLINIC / EMERGENCY
 
-🎯 **CLINICAL SIGNIFICANCE**
-- Rate urgency: ROUTINE / URGENT / CRITICAL
-- Explain why this rating was given
+Keep response under 150 words. Serious wounds need professional care.""",
 
-👨‍⚕️ **RECOMMENDED NEXT STEPS**
-- What specialist should review this (neurologist, oncologist, radiologist, etc.)
-- Any additional tests or imaging recommended
-- Timeline for follow-up
+    "general": """Analyze this health-related image briefly:
+1. What you see
+2. Possible conditions (top 2-3)
+3. Severity level
+4. Recommended action
 
-⚠️ **IMPORTANT DISCLAIMER**: This is AI-assisted preliminary analysis ONLY. This is NOT a diagnosis. All medical imaging MUST be interpreted by a qualified radiologist or specialist physician. Do not make treatment decisions based on this analysis alone.""",
-
-    "skin": """You are a dermatology AI assistant. Analyze this skin image carefully.
-
-Provide your analysis in this EXACT format:
-
-🔍 **VISUAL OBSERVATION**
-- Location on body (if visible)
-- Size, shape, and color of the condition
-- Texture, borders, and distribution pattern
-- Any secondary features (swelling, discharge, scaling)
-
-📋 **POSSIBLE CONDITIONS** (list top 3-5)
-- Condition 1: [name] - [likelihood: High/Medium/Low] - [key matching features]
-- Condition 2: [name] - [likelihood: High/Medium/Low] - [key matching features]
-- Condition 3: [name] - [likelihood: High/Medium/Low] - [key matching features]
-
-⚠️ **SEVERITY ASSESSMENT**
-- Rating: MILD / MODERATE / SEVERE
-- Reasoning for this rating
-
-💊 **RECOMMENDED ACTION**
-- [ ] Self-care at home (if mild)
-- [ ] See a dermatologist within 1-2 weeks
-- [ ] See a doctor within a few days
-- [ ] Seek immediate medical attention
-
-🏠 **HOME CARE TIPS** (if applicable)
-- Tip 1
-- Tip 2
-- Tip 3
-
-⚠️ **DISCLAIMER**: This is AI analysis, NOT a diagnosis. Consult a dermatologist for proper evaluation.""",
-
-    "wound": """You are a wound care AI assistant. Analyze this wound image carefully.
-
-Provide your analysis in this EXACT format:
-
-🔍 **WOUND ASSESSMENT**
-- Type: Cut, Laceration, Burn, Abrasion, Puncture, Ulcer, Bite
-- Location and estimated size
-- Depth assessment: Superficial / Partial thickness / Full thickness
-- Wound edges and surrounding tissue condition
-
-📋 **OBSERVATIONS**
-- Color of wound bed (pink, red, yellow, black, mixed)
-- Signs of infection: Redness, swelling, pus, odor, warmth
-- Bleeding status
-- Tissue viability
-
-⚠️ **SEVERITY ASSESSMENT**
-- Rating: MINOR / MODERATE / SEVERE / CRITICAL
-- Reasoning
-
-🚨 **IMMEDIATE ACTION NEEDED**
-- [ ] Can be treated at home
-- [ ] Needs medical attention within 24 hours  
-- [ ] Needs urgent care today
-- [ ] EMERGENCY - Seek immediate care
-
-💊 **WOUND CARE INSTRUCTIONS**
-- Cleaning recommendations
-- Dressing type suggested
-- Signs to watch for
-
-⚠️ **DISCLAIMER**: Serious wounds require professional medical evaluation. If in doubt, seek medical care.""",
-
-    "general": """You are a medical AI assistant analyzing a health-related image.
-
-Analyze this image carefully and provide your findings in this format:
-
-🔍 **WHAT I SEE**
-- Detailed description of the image
-- Type of medical content (body part, condition, scan, etc.)
-- All visible abnormalities or points of interest
-
-📋 **ANALYSIS**
-- Possible conditions or findings
-- Key observations supporting each possibility
-- Confidence level for each (High/Medium/Low)
-
-⚠️ **SEVERITY**
-- MILD / MODERATE / SEVERE / REQUIRES SPECIALIST
-- Explanation
-
-👨‍⚕️ **RECOMMENDATION**
-- Self-care guidance if appropriate
-- When to see a doctor
-- What type of specialist if needed
-
-⚠️ **DISCLAIMER**: This is AI analysis only. Always consult healthcare professionals for medical decisions."""
+Keep response under 150 words. This is AI analysis only - consult healthcare professionals."""
 }
 
 # Default fallback prompt
@@ -203,11 +119,11 @@ class ImageAnalysisService:
             
             # Add user context if provided
             if context:
-                prompt += f"\n\n📝 **Patient's Description**: {context}"
+                prompt += f"\n\nPatient notes: {context}"
             
-            prompt += "\n\nAnalyze this image now:"
+            prompt += "\n\nAnalyze now:"
             
-            # Call LLaVA model
+            # Call LLaVA model - OPTIMIZED for speed
             response = ollama.chat(
                 model=self.model,
                 messages=[
@@ -218,9 +134,9 @@ class ImageAnalysisService:
                     }
                 ],
                 options={
-                    "temperature": 0.2,  # Lower temperature for medical accuracy
+                    "temperature": 0.3,
                     "top_p": 0.9,
-                    "num_predict": 2000  # Allow longer responses for detailed analysis
+                    "num_predict": 400  # Reduced for faster response
                 }
             )
             

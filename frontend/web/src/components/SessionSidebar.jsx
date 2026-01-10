@@ -90,6 +90,9 @@ export default function SessionSidebar({
     preferred_language: 'en'
   })
   const [savingProfile, setSavingProfile] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // session_id to confirm delete
+  const [editingTitle, setEditingTitle] = useState(null) // session_id being edited
+  const [editTitleValue, setEditTitleValue] = useState('')
 
   // Fetch sessions on mount and when phone changes
   useEffect(() => {
@@ -247,8 +250,94 @@ export default function SessionSidebar({
     ml: 'മലയാളം'
   }
 
+  // Handle delete with confirmation
+  const handleDeleteClick = (sessionId, e) => {
+    e.stopPropagation()
+    setDeleteConfirm(sessionId)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${deleteConfirm}?user_id=${phone}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetchSessions()
+        if (deleteConfirm === currentSessionId) {
+          onNewSession(null)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to delete session:', e)
+    }
+    setDeleteConfirm(null)
+  }
+
+  // Handle title editing
+  const startEditTitle = (session, e) => {
+    e.stopPropagation()
+    setEditingTitle(session.session_id)
+    setEditTitleValue(session.title || '')
+  }
+
+  const saveTitle = async (e) => {
+    e?.stopPropagation()
+    if (!editingTitle || !editTitleValue.trim()) {
+      setEditingTitle(null)
+      return
+    }
+    try {
+      await fetch(`${API_BASE}/sessions/${editingTitle}?user_id=${phone}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitleValue.trim() })
+      })
+      fetchSessions()
+    } catch (e) {
+      console.error('Failed to update title:', e)
+    }
+    setEditingTitle(null)
+  }
+
   return (
     <>
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div 
+            className="modal-overlay delete-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div 
+              className="delete-confirm-modal"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-icon">
+                <TrashIcon />
+              </div>
+              <h3>Archive this chat?</h3>
+              <p>This conversation will be moved to archives. You can restore it later.</p>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={() => setDeleteConfirm(null)}>
+                  Cancel
+                </button>
+                <button className="btn-delete" onClick={confirmDelete}>
+                  Archive
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Toggle Button */}
       <button 
         className="sidebar-toggle"
@@ -296,21 +385,45 @@ export default function SessionSidebar({
                   <motion.div
                     key={session.session_id}
                     className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
-                    onClick={() => loadSession(session.session_id)}
+                    onClick={() => !editingTitle && loadSession(session.session_id)}
                     whileHover={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
                     whileTap={{ scale: 0.98 }}
                   >
                     <ChatIcon />
                     <div className="session-info">
-                      <span className="session-title">{session.title || 'Health Consultation'}</span>
+                      {editingTitle === session.session_id ? (
+                        <input
+                          className="title-edit-input"
+                          value={editTitleValue}
+                          onChange={e => setEditTitleValue(e.target.value)}
+                          onBlur={saveTitle}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveTitle(e)
+                            if (e.key === 'Escape') setEditingTitle(null)
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="session-title" title="Double-click to edit">
+                          {session.title || 'Health Consultation'}
+                        </span>
+                      )}
                       <span className="session-preview">
                         {session.symptom_summary || session.message_count + ' messages'}
                       </span>
                     </div>
                     <div className="session-actions">
                       <button 
+                        className="session-action-btn edit"
+                        onClick={(e) => startEditTitle(session, e)}
+                        title="Edit title"
+                      >
+                        <EditIcon />
+                      </button>
+                      <button 
                         className="session-action-btn delete"
-                        onClick={(e) => deleteSession(session.session_id, e)}
+                        onClick={(e) => handleDeleteClick(session.session_id, e)}
                         title="Archive session"
                       >
                         <TrashIcon />
@@ -768,6 +881,122 @@ export default function SessionSidebar({
           .session-sidebar.open {
             transform: translateX(0);
           }
+        }
+
+        /* Delete Confirmation Modal */
+        .delete-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          backdrop-filter: blur(4px);
+        }
+
+        .delete-confirm-modal {
+          background: #1e1e2e;
+          border-radius: 16px;
+          padding: 24px;
+          max-width: 340px;
+          width: 90%;
+          text-align: center;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .delete-confirm-modal .modal-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: rgba(239, 68, 68, 0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 16px;
+          color: #ef4444;
+        }
+
+        .delete-confirm-modal h3 {
+          color: white;
+          font-size: 18px;
+          margin: 0 0 8px;
+        }
+
+        .delete-confirm-modal p {
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 14px;
+          margin: 0 0 20px;
+          line-height: 1.5;
+        }
+
+        .delete-confirm-modal .modal-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        .delete-confirm-modal .btn-cancel,
+        .delete-confirm-modal .btn-delete {
+          flex: 1;
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+        }
+
+        .delete-confirm-modal .btn-cancel {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+        }
+        .delete-confirm-modal .btn-cancel:hover {
+          background: rgba(255, 255, 255, 0.15);
+        }
+
+        .delete-confirm-modal .btn-delete {
+          background: #ef4444;
+          color: white;
+        }
+        .delete-confirm-modal .btn-delete:hover {
+          background: #dc2626;
+          transform: translateY(-1px);
+        }
+
+        /* Title Edit Input */
+        .title-edit-input {
+          width: 100%;
+          padding: 4px 8px;
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid #667eea;
+          border-radius: 4px;
+          color: white;
+          font-size: 13px;
+          outline: none;
+        }
+
+        /* Session action buttons */
+        .session-actions {
+          display: flex;
+          gap: 4px;
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+        .session-item:hover .session-actions {
+          opacity: 1;
+        }
+
+        .session-action-btn.edit {
+          color: rgba(255, 255, 255, 0.5);
+        }
+        .session-action-btn.edit:hover {
+          color: #667eea;
+          background: rgba(102, 126, 234, 0.1);
         }
       `}</style>
     </>

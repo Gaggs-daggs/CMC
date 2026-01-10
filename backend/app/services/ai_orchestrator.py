@@ -64,6 +64,19 @@ except ImportError as e:
     logger.warning(f"Translation service not available: {e}")
     TRANSLATION_AVAILABLE = False
 
+# Import Enhanced Medicine Service for comprehensive drug enrichment
+try:
+    from app.services.enhanced_medicine_service import (
+        enhanced_medicine_service,
+        enrich_medications,
+        get_quick_medicines
+    )
+    ENHANCED_MEDICINE_AVAILABLE = True
+    logger.info("✅ Enhanced Medicine Service available")
+except ImportError as e:
+    logger.warning(f"Enhanced Medicine Service not available: {e}")
+    ENHANCED_MEDICINE_AVAILABLE = False
+
 
 @dataclass
 class OrchestratedResponse:
@@ -263,8 +276,8 @@ class ProductionAIOrchestrator:
         # ========== STEP 1: TRIAGE (Non-LLM, Instant) ==========
         if self.triage_classifier:
             try:
-                # Extract symptoms from memory
-                all_symptoms = self.ai_assistant.conversation_memory.get_all_symptoms(session_id)
+                # Extract symptoms from memory (using .memory attribute)
+                all_symptoms = self.ai_assistant.memory.get_all_symptoms(session_id)
                 
                 # Run triage on English message for better accuracy
                 triage_result = self.triage_classifier.classify(
@@ -386,8 +399,52 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
             response.follow_up_questions = ai_response.get("follow_up_questions", [])
             response.mental_health_detected = ai_response.get("mental_health", {}).get("detected", False)
             
-            # Filter out medications that match user allergies
-            if user_allergies and response.medications:
+            # ========== ENHANCED MEDICINE ENRICHMENT ==========
+            # Enrich medications with ALL available databases (RxNorm, DailyMed, ATC, Indian DB)
+            if ENHANCED_MEDICINE_AVAILABLE and response.medications:
+                try:
+                    logger.info(f"💊 Enriching {len(response.medications)} medications with all databases...")
+                    response.medications = await enrich_medications(
+                        response.medications,
+                        include_safety=True
+                    )
+                    
+                    # Filter and add allergy warnings
+                    if user_allergies:
+                        for med in response.medications:
+                            med_name = (med.get("name", "") or "").lower()
+                            generic_name = (med.get("generic_name", "") or "").lower()
+                            ingredients = [i.lower() for i in med.get("active_ingredients", [])]
+                            
+                            # Check for allergen match
+                            is_allergen = any(
+                                allergen in med_name or 
+                                allergen in generic_name or
+                                any(allergen in ing for ing in ingredients)
+                                for allergen in user_allergies
+                            )
+                            
+                            if is_allergen:
+                                logger.warning(f"⚠️ Allergy warning for {med.get('name')} - user allergies: {user_allergies}")
+                                if "warnings" not in med:
+                                    med["warnings"] = []
+                                med["warnings"].insert(0, f"⚠️ ALLERGY WARNING: You may be allergic to this medication")
+                                med["allergy_warning"] = True
+                    
+                    components_used.append("enhanced_medicine_enrichment")
+                    logger.info(f"✅ Enriched medications: {[m.get('name') for m in response.medications]}")
+                    
+                except Exception as e:
+                    logger.error(f"Enhanced medicine enrichment error: {e}")
+                    # Fallback: keep original medications with basic allergy filter
+                    if user_allergies:
+                        for med in response.medications:
+                            med_name = (med.get("name", "") or "").lower()
+                            is_allergen = any(allergen in med_name for allergen in user_allergies)
+                            if is_allergen:
+                                med["allergy_warning"] = "⚠️ You may be allergic to this medication"
+            elif user_allergies and response.medications:
+                # Fallback allergy filtering without enhanced service
                 safe_medications = []
                 for med in response.medications:
                     med_name = (med.get("name", "") or "").lower()
@@ -514,7 +571,7 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
         
         # ========== INSTANT TRIAGE (yield first) ==========
         if self.triage_classifier:
-            all_symptoms = self.ai_assistant.conversation_memory.get_all_symptoms(session_id)
+            all_symptoms = self.ai_assistant.memory.get_all_symptoms(session_id)
             triage_result = self.triage_classifier.classify(
                 symptoms=all_symptoms,
                 user_input=message,
