@@ -649,14 +649,23 @@ export default function App() {
   const sendMsg = async (override) => {
     const msg = override || input
     if (!msg.trim() || loading) return
-    // Use the selected language from dropdown for translation output
-    // Auto-detect is only for display, but we use the selected language setting
-    const msgLang = detectLanguage(msg)
-    if (msgLang !== 'en' && msgLang !== detectedLang) setDetectedLang(msgLang)
     
-    // Use the USER-SELECTED language (detectedLang) for response translation
-    // This ensures the response comes in the language the user chose
-    const outputLang = detectedLang || language || 'en'
+    // Detect language from user's message
+    const msgLang = detectLanguage(msg)
+    
+    // Determine output language priority:
+    // 1. Use the dropdown-selected language (detectedLang) - this is what user explicitly wants
+    // 2. If message is in a different non-English language, switch to that
+    // 3. Fallback to 'en'
+    let outputLang = detectedLang || language || 'en'
+    
+    // If user types in a different non-English language, update selection
+    if (msgLang !== 'en' && msgLang !== detectedLang) {
+      setDetectedLang(msgLang)
+      outputLang = msgLang  // Use the detected language immediately (don't wait for state update)
+    }
+    
+    console.log('📝 Message language:', msgLang, '| Output language:', outputLang, '| Dropdown selection:', detectedLang)
     
     setInput('')
     setMessages(m => [...m, { role: 'user', text: msg, time: new Date() }])
@@ -685,9 +694,11 @@ export default function App() {
       
       // Use translated response if available, otherwise fall back to original
       const txt = data.response_translated || data.response || 'No response'
-      console.log('Response:', data.response?.substring(0, 100))
-      console.log('Response Translated:', data.response_translated?.substring(0, 100))
-      console.log('Using text:', txt?.substring(0, 100))
+      console.log('🔤 Language sent:', outputLang)
+      console.log('📥 Response (English):', data.response?.substring(0, 100))
+      console.log('📥 Response (Translated):', data.response_translated ? data.response_translated.substring(0, 100) : 'NULL/EMPTY')
+      console.log('✅ Using text:', txt?.substring(0, 100))
+      console.log('📊 Components used:', data.components_used)
       setMessages(m => [...m, { 
         role: 'assistant', 
         text: txt, 

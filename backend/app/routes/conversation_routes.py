@@ -137,6 +137,14 @@ async def start_conversation(request: StartConversationRequest):
             else:
                 logger.info(f"🆕 New user registered: {request.user_id}")
         
+        # IMPORTANT: Clear any old AI conversation memory for this new session
+        # This ensures new sessions start fresh without old context
+        try:
+            powerful_ai.clear_conversation(session_id)
+            logger.info(f"🧹 Cleared AI memory for new session: {session_id}")
+        except Exception as e:
+            logger.warning(f"Could not clear AI memory: {e}")
+        
         sessions[session_id] = {
             "user_id": request.user_id,  # Phone number
             "phone_number": request.user_id,  # Explicit for clarity

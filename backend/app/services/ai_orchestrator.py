@@ -227,6 +227,24 @@ class ProductionAIOrchestrator:
             target_language=target_language
         )
         
+        # ========== STEP 0.5: TRANSLATE INPUT TO ENGLISH ==========
+        # AI models understand English best, so translate non-English input
+        english_message = message
+        if target_language != "en" and self.translator:
+            try:
+                english_message = self.translator.translate_to_english(
+                    text=message,
+                    source_language=target_language
+                )
+                if english_message and english_message != message:
+                    components_used.append(f"input_translation:{target_language}->en")
+                    logger.info(f"🔄 Translated input: '{message[:50]}...' -> '{english_message[:50]}...'")
+                else:
+                    english_message = message  # Fallback if translation failed
+            except Exception as e:
+                logger.warning(f"Input translation failed: {e}")
+                english_message = message
+        
         # ========== STEP 0: USER PROFILE CONTEXT ==========
         user_context = ""
         user_allergies = []
@@ -248,10 +266,10 @@ class ProductionAIOrchestrator:
                 # Extract symptoms from memory
                 all_symptoms = self.ai_assistant.conversation_memory.get_all_symptoms(session_id)
                 
-                # Run triage
+                # Run triage on English message for better accuracy
                 triage_result = self.triage_classifier.classify(
                     symptoms=all_symptoms,
-                    user_input=message,
+                    user_input=english_message,  # Use translated message
                     vitals=vitals
                 )
                 
@@ -275,10 +293,10 @@ class ProductionAIOrchestrator:
         # ========== STEP 2: SAFETY CHECK INPUT (Check for emergencies) ==========
         if include_safety and self.safety_guard:
             try:
-                # Check if input contains emergency keywords
+                # Check if input contains emergency keywords (use English for better detection)
                 input_safety = self.safety_guard.check_response(
                     response="",  # No response yet, just checking input
-                    user_input=message,
+                    user_input=english_message,  # Use translated message
                     detected_symptoms=response.symptoms_detected
                 )
                 
@@ -302,9 +320,9 @@ class ProductionAIOrchestrator:
         
         if include_rag and self.knowledge_base:
             try:
-                # Query knowledge base
+                # Query knowledge base with English message
                 query_result = self.knowledge_base.query(
-                    query=message,
+                    query=english_message,  # Use translated message
                     max_results=3
                 )
                 
@@ -337,22 +355,25 @@ class ProductionAIOrchestrator:
             if rag_context:
                 context_parts.append(f"**Medical Knowledge:**\n{rag_context}")
             
-            # Build final enhanced message
-            enhanced_message = message
+            # Build final enhanced message (use English for AI)
+            enhanced_message = english_message
             if context_parts:
                 context_str = "\n\n".join(context_parts)
                 enhanced_message = f"""{context_str}
 
-**User's current concern:** {message}
+**User's current concern:** {english_message}
 
 Provide an accurate, personalized response. Be empathetic and clear. If the patient has known allergies, warn about potential medication interactions."""
             
             # Get AI response using get_ai_response which handles medication lookup with accumulated symptoms
+            logger.info(f"🤖 Sending to AI model: '{enhanced_message[:100]}...'")
             ai_response = await get_ai_response(
                 message=enhanced_message,
                 session_id=session_id,
                 vitals=vitals
             )
+            
+            logger.info(f"🤖 AI Model used: {ai_response.get('model_used', 'unknown')}")
             
             # ai_response is now a dict from get_ai_response
             response.text = ai_response["response"]
@@ -396,7 +417,7 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
             try:
                 output_safety = self.safety_guard.check_response(
                     response=response.text,
-                    user_input=message,
+                    user_input=english_message,  # Use English for better safety detection
                     detected_symptoms=response.symptoms_detected
                 )
                 
