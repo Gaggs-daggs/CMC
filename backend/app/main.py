@@ -8,7 +8,7 @@ import logging
 from app.config import settings
 from app.utils.database import db
 from app.utils.logging_config import setup_logging
-from app.routes import conversation_routes, user_routes, vitals_routes, health_routes, image_routes, drug_routes, tts_routes, profile_routes, autocomplete_routes
+from app.routes import conversation_routes, user_routes, vitals_routes, health_routes, image_routes, drug_routes, tts_routes, profile_routes, autocomplete_routes, session_routes
 
 # Setup logging
 logger = setup_logging(settings.APP_NAME, settings.DEBUG)
@@ -104,6 +104,7 @@ app.include_router(drug_routes.router, prefix="/api/v1", tags=["Medications"])
 app.include_router(tts_routes.router, prefix="/api/v1", tags=["Text-to-Speech"])
 app.include_router(profile_routes.router, prefix="/api/v1", tags=["User Profiles"])
 app.include_router(autocomplete_routes.router, prefix="/api/v1", tags=["Autocomplete"])
+app.include_router(session_routes.router, prefix="/api/v1", tags=["Sessions"])
 
 
 # Root endpoint

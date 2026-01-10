@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './App.premium.css'
 import WebGLBackground from './components/WebGLBackground'
+import SessionSidebar from './components/SessionSidebar'
 import {
   MedicalCrossIcon,
   HeartPulseIcon,
@@ -299,6 +300,7 @@ export default function App() {
   const [mentalHealthInfo, setMentalHealthInfo] = useState(savedSession?.mentalHealth || null)
   const [showMentalHealthSupport, setShowMentalHealthSupport] = useState(false)
   const [showCrisisBanner, setShowCrisisBanner] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   
   const chatEndRef = useRef(null)
   const recognitionRef = useRef(null)
@@ -812,6 +814,54 @@ export default function App() {
       setUrgencyLevel('low')
       setVitals(null)
       setView('home')
+    }
+  }
+
+  // Session sidebar handlers
+  const handleNewSession = (session) => {
+    if (session) {
+      setSessionId(session.session_id)
+      setMessages([{ role: 'assistant', text: 'How can I help you today?', time: new Date() }])
+      setDetectedSymptoms([])
+      setUrgencyLevel('low')
+      setSuggestedMeds([])
+      setTriageInfo(null)
+      setMentalHealthInfo(null)
+      setView('chat')
+    } else {
+      // Clear current session
+      setMessages([])
+      setSessionId('')
+      setDetectedSymptoms([])
+      setUrgencyLevel('low')
+    }
+  }
+
+  const handleLoadSession = (session) => {
+    if (session) {
+      setSessionId(session.session_id)
+      // Convert messages from API format to app format
+      const loadedMessages = (session.messages || []).map(m => ({
+        role: m.role,
+        text: m.content,
+        time: new Date(m.timestamp)
+      }))
+      setMessages(loadedMessages.length > 0 ? loadedMessages : [{ 
+        role: 'assistant', 
+        text: 'How can I help you today?', 
+        time: new Date() 
+      }])
+      setDetectedSymptoms(session.symptoms || [])
+      setUrgencyLevel(session.urgency_level || 'low')
+      setView('chat')
+    }
+  }
+
+  const handleProfileUpdate = (profile) => {
+    setProfileData({ ...profileData, profile })
+    if (profile.preferred_language) {
+      setLanguage(profile.preferred_language)
+      setDetectedLang(profile.preferred_language)
     }
   }
 
@@ -1743,7 +1793,21 @@ export default function App() {
   }
 
   return (
-    <div className="app-container premium-theme">
+    <div className="app-container premium-theme with-sidebar">
+      {/* Session Sidebar */}
+      {view === 'chat' && phone && (
+        <SessionSidebar
+          phone={phone}
+          currentSessionId={sessionId}
+          onNewSession={handleNewSession}
+          onLoadSession={handleLoadSession}
+          onProfileUpdate={handleProfileUpdate}
+          profileData={profileData}
+          isOpen={sidebarOpen}
+          setIsOpen={setSidebarOpen}
+        />
+      )}
+
       {/* Emergency Banner */}
       <AnimatePresence>
         {showEmergency && (

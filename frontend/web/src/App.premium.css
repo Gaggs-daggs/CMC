@@ -2764,3 +2764,39 @@ body {
   font-style: italic;
   margin-left: auto;
 }
+
+/* ======================================
+   Session Sidebar Layout
+   ====================================== */
+
+/* Sidebar container styles when sidebar is present */
+.app-container.with-sidebar {
+  position: relative;
+}
+
+/* Desktop: Push main content to the right when sidebar is open */
+@media (min-width: 768px) {
+  .app-container.with-sidebar .header,
+  .app-container.with-sidebar .main-content,
+  .app-container.with-sidebar .footer {
+    margin-left: 280px;
+    transition: margin-left 0.3s ease;
+  }
+  
+  .app-container.with-sidebar .header {
+    padding-left: 24px;
+  }
+}
+
+/* Mobile: Full width, sidebar overlays */
+@media (max-width: 767px) {
+  .app-container.with-sidebar .header,
+  .app-container.with-sidebar .main-content,
+  .app-container.with-sidebar .footer {
+    margin-left: 0;
+  }
+  
+  .app-container.with-sidebar .header {
+    padding-left: 56px; /* Space for menu button */
+  }
+}
