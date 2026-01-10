@@ -79,22 +79,34 @@ class TranslationService:
         
         cache_key = f"{src}:{target_language}:{hashlib.md5(text.encode()).hexdigest()}"
         if cache_key in self._cache:
+            logger.info(f"Translation cache hit for {src} -> {target_language}")
             return self._cache[cache_key]
         
         if not GOOGLE_TRANSLATE_AVAILABLE:
+            logger.warning("Google Translate not available - returning original text")
             return text
         
-        try:
-            translator = GoogleTranslator(source=self.get_google_code(src), target=self.get_google_code(target_language))
-            result = translator.translate(text)
-            if result:
-                self._cache[cache_key] = result
-                logger.info(f"Translated: {src} -> {target_language}")
-                return result
-            return text
-        except Exception as e:
-            logger.error(f"Translation failed: {e}")
-            return text
+        # Retry logic for rate limiting
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                translator = GoogleTranslator(source=self.get_google_code(src), target=self.get_google_code(target_language))
+                result = translator.translate(text)
+                if result:
+                    self._cache[cache_key] = result
+                    logger.info(f"✅ Translated: {src} -> {target_language} ({len(text)} -> {len(result)} chars)")
+                    return result
+                logger.warning(f"Translation returned empty result")
+                return text
+            except Exception as e:
+                logger.error(f"Translation attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                else:
+                    logger.error(f"❌ All translation attempts failed, returning original text")
+                    return text
+        return text
     
     def translate_to_english(self, text, source_language=None):
         if not text or not source_language or source_language == "en":

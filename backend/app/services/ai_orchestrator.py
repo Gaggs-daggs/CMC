@@ -437,20 +437,31 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
                 logger.error(f"Safety validation error: {e}")
         
         # ========== STEP 6: TRANSLATION ==========
-        if target_language != "en" and self.translator:
-            try:
-                trans_start = time.time()
-                response.text_translated = self.translator.translate(
-                    response.text,
-                    target_language=target_language,
-                    source_language="en"
-                )
-                response.translation_time_ms = int((time.time() - trans_start) * 1000)
-                components_used.append(f"translation:{target_language}")
-                
-            except Exception as e:
-                logger.error(f"Translation error: {e}")
-                response.text_translated = response.text  # Fallback to English
+        logger.info(f"🌐 Translation check: target_language={target_language}, translator_available={self.translator is not None}")
+        
+        if target_language != "en":
+            if self.translator:
+                try:
+                    trans_start = time.time()
+                    translated = self.translator.translate(
+                        response.text,
+                        target_language=target_language,
+                        source_language="en"
+                    )
+                    if translated and translated != response.text:
+                        response.text_translated = translated
+                        response.translation_time_ms = int((time.time() - trans_start) * 1000)
+                        components_used.append(f"translation:{target_language}")
+                        logger.info(f"✅ Translation successful: {len(response.text)} chars -> {len(translated)} chars")
+                    else:
+                        logger.warning(f"⚠️ Translation returned same text or empty")
+                        response.text_translated = response.text
+                except Exception as e:
+                    logger.error(f"❌ Translation error: {e}")
+                    response.text_translated = response.text  # Fallback to English
+            else:
+                logger.warning(f"⚠️ Translation service not available, returning English response")
+                response.text_translated = response.text  # No translator, use English
         
         # ========== STEP 8: RECORD CONSULTATION ==========
         if phone_number and PROFILE_SERVICE_AVAILABLE and response.symptoms_detected:

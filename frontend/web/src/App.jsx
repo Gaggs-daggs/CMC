@@ -694,11 +694,15 @@ export default function App() {
       
       // Use translated response if available, otherwise fall back to original
       const txt = data.response_translated || data.response || 'No response'
-      console.log('🔤 Language sent:', outputLang)
-      console.log('📥 Response (English):', data.response?.substring(0, 100))
-      console.log('📥 Response (Translated):', data.response_translated ? data.response_translated.substring(0, 100) : 'NULL/EMPTY')
-      console.log('✅ Using text:', txt?.substring(0, 100))
+      
+      // Detailed logging for debugging translation issues
+      console.log('=== API Response Debug ===')
+      console.log('🔤 Language sent to API:', outputLang)
+      console.log('📥 Response (English):', data.response?.substring(0, 150))
+      console.log('📥 Response (Translated):', data.response_translated ? data.response_translated.substring(0, 150) : '❌ NULL/EMPTY - Translation not working!')
+      console.log('✅ Displaying text:', txt?.substring(0, 150))
       console.log('📊 Components used:', data.components_used)
+      console.log('=========================')
       setMessages(m => [...m, { 
         role: 'assistant', 
         text: txt, 
