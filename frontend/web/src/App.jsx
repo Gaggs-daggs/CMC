@@ -695,7 +695,7 @@ export default function App() {
       // Use translated response if available, otherwise fall back to original
       const txt = data.response_translated || data.response || 'No response'
       
-      // Detailed logging for debugging translation issues
+      // Detailed logging for debugging translation issues - v2
       console.log('=== API Response Debug ===')
       console.log('🔤 Language sent to API:', outputLang)
       console.log('📥 Response (English):', data.response?.substring(0, 150))
@@ -703,9 +703,13 @@ export default function App() {
       console.log('✅ Displaying text:', txt?.substring(0, 150))
       console.log('📊 Components used:', data.components_used)
       console.log('=========================')
+      
+      // IMPORTANT: Use translated response, fall back to English only if translation is null
+      const displayText = (outputLang !== 'en' && data.response_translated) ? data.response_translated : txt
+      
       setMessages(m => [...m, { 
         role: 'assistant', 
-        text: txt, 
+        text: displayText,  // Use displayText which prefers translated
         time: new Date(), 
         medications: data.medications || [],
         triage: data.triage || null,
