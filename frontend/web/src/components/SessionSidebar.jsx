@@ -87,24 +87,29 @@ export default function SessionSidebar({
     blood_type: '',
     height_cm: '',
     weight_kg: '',
-    preferred_language: 'en'
+    preferred_language: 'en',
+    allergies: [],
+    medical_conditions: []
   })
   const [savingProfile, setSavingProfile] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // session_id to confirm delete
   const [editingTitle, setEditingTitle] = useState(null) // session_id being edited
   const [editTitleValue, setEditTitleValue] = useState('')
 
-  // Fetch sessions on mount and when phone changes
+  // Fetch sessions and profile on mount and when phone changes
   useEffect(() => {
     if (phone) {
       fetchSessions()
+      // Always fetch profile when phone is available
+      fetchProfile()
     }
   }, [phone])
 
-  // Initialize profile form when profileData changes
+  // Also update profile form when profileData prop changes
   useEffect(() => {
     if (profileData?.profile) {
       const p = profileData.profile
+      console.log('Updating profile form from profileData:', p)
       setProfileForm({
         name: p.name || '',
         age: p.age?.toString() || '',
@@ -112,10 +117,39 @@ export default function SessionSidebar({
         blood_type: p.blood_type || '',
         height_cm: p.height_cm?.toString() || '',
         weight_kg: p.weight_kg?.toString() || '',
-        preferred_language: p.preferred_language || 'en'
+        preferred_language: p.preferred_language || 'en',
+        allergies: p.allergies?.map(a => a.allergen || a) || [],
+        medical_conditions: p.medical_conditions?.map(c => c.name || c) || []
       })
     }
   }, [profileData])
+
+  // Fetch full profile from API
+  const fetchProfile = async () => {
+    if (!phone) return
+    try {
+      console.log('Fetching profile for phone:', phone)
+      const res = await fetch(`${API_BASE}/profile/${encodeURIComponent(phone)}`)
+      const data = await res.json()
+      console.log('Profile API response:', data)
+      if (data.success && data.profile) {
+        const p = data.profile
+        setProfileForm({
+          name: p.name || '',
+          age: p.age?.toString() || '',
+          gender: p.gender || 'not_specified',
+          blood_type: p.blood_type || '',
+          height_cm: p.height_cm?.toString() || '',
+          weight_kg: p.weight_kg?.toString() || '',
+          preferred_language: p.preferred_language || 'en',
+          allergies: p.allergies?.map(a => a.allergen || a) || [],
+          medical_conditions: p.medical_conditions?.map(c => c.name || c) || []
+        })
+      }
+    } catch (e) {
+      console.warn('Could not fetch profile:', e)
+    }
+  }
 
   const fetchSessions = async () => {
     if (!phone) return
@@ -548,6 +582,34 @@ export default function SessionSidebar({
                   </select>
                 </div>
 
+                {/* Allergies Display */}
+                {profileForm.allergies && profileForm.allergies.length > 0 && (
+                  <div className="form-group">
+                    <label>Allergies</label>
+                    <div className="tags-display">
+                      {profileForm.allergies.map((allergy, idx) => (
+                        <span key={idx} className="tag allergy-tag">
+                          {allergy}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Medical Conditions Display */}
+                {profileForm.medical_conditions && profileForm.medical_conditions.length > 0 && (
+                  <div className="form-group">
+                    <label>Medical Conditions</label>
+                    <div className="tags-display">
+                      {profileForm.medical_conditions.map((condition, idx) => (
+                        <span key={idx} className="tag condition-tag">
+                          {condition}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <button 
                   className="save-profile-btn"
                   onClick={saveProfile}
@@ -597,7 +659,7 @@ export default function SessionSidebar({
           position: fixed;
           top: 0;
           left: 0;
-          width: 280px;
+          width: 200px;
           height: 100vh;
           background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
           border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -608,7 +670,7 @@ export default function SessionSidebar({
         }
 
         .sidebar-header {
-          padding: 16px;
+          padding: 10px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
@@ -616,13 +678,13 @@ export default function SessionSidebar({
           width: 100%;
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
+          gap: 8px;
+          padding: 8px 12px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border: none;
           border-radius: 8px;
           color: white;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
@@ -657,18 +719,18 @@ export default function SessionSidebar({
           opacity: 0.3;
         }
         .no-sessions .hint {
-          font-size: 12px;
-          margin-top: 8px;
+          font-size: 11px;
+          margin-top: 6px;
         }
 
         .session-group {
-          margin-bottom: 16px;
+          margin-bottom: 10px;
         }
 
         .session-date {
-          font-size: 11px;
+          font-size: 10px;
           color: rgba(255, 255, 255, 0.4);
-          padding: 8px 12px;
+          padding: 4px 8px;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
@@ -676,9 +738,9 @@ export default function SessionSidebar({
         .session-item {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 10px 12px;
-          border-radius: 8px;
+          gap: 8px;
+          padding: 6px 8px;
+          border-radius: 6px;
           cursor: pointer;
           transition: all 0.2s;
           color: rgba(255, 255, 255, 0.8);
@@ -693,6 +755,8 @@ export default function SessionSidebar({
         .session-item svg {
           flex-shrink: 0;
           opacity: 0.6;
+          width: 14px;
+          height: 14px;
         }
 
         .session-info {
@@ -701,14 +765,14 @@ export default function SessionSidebar({
         }
         .session-title {
           display: block;
-          font-size: 13px;
+          font-size: 11px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .session-preview {
           display: block;
-          font-size: 11px;
+          font-size: 10px;
           color: rgba(255, 255, 255, 0.4);
           white-space: nowrap;
           overflow: hidden;
@@ -717,7 +781,7 @@ export default function SessionSidebar({
 
         .session-actions {
           display: flex;
-          gap: 4px;
+          gap: 2px;
           opacity: 0;
           transition: opacity 0.2s;
         }
@@ -858,6 +922,35 @@ export default function SessionSidebar({
         .save-profile-btn:disabled {
           opacity: 0.6;
           cursor: not-allowed;
+        }
+
+        /* Tags display for allergies and conditions */
+        .tags-display {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 6px;
+          min-height: 36px;
+        }
+        .tag {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .allergy-tag {
+          background: rgba(239, 68, 68, 0.2);
+          color: #ef4444;
+          border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .condition-tag {
+          background: rgba(245, 158, 11, 0.2);
+          color: #f59e0b;
+          border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         /* Desktop styles */

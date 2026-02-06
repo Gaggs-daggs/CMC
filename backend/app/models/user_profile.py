@@ -160,62 +160,146 @@ class UserProfile(BaseModel):
         self.profile_completeness = min(score, max_score)
         return self.profile_completeness
     
+    def get_age_group(self) -> str:
+        """Get age group category for personalized recommendations"""
+        if not self.age:
+            return "adult"
+        if self.age < 12:
+            return "child"
+        elif self.age < 18:
+            return "teenager"
+        elif self.age < 40:
+            return "young_adult"
+        elif self.age < 60:
+            return "middle_aged"
+        elif self.age < 75:
+            return "senior"
+        else:
+            return "elderly"
+    
+    def get_tts_preferences(self) -> dict:
+        """
+        Get TTS preferences based on user profile.
+        Returns recommended voice settings for this user.
+        """
+        prefs = {
+            "gender": "female",  # Default
+            "speed": "normal",
+            "reason": []
+        }
+        
+        # Set voice gender based on user preference or opposite gender (more natural)
+        if self.gender:
+            # Use opposite gender voice (often sounds more natural/comforting)
+            if self.gender == Gender.MALE:
+                prefs["gender"] = "female"
+            elif self.gender == Gender.FEMALE:
+                prefs["gender"] = "male"
+        
+        # Adjust speed based on age
+        if self.age:
+            if self.age >= 70:
+                prefs["speed"] = "very_slow"
+                prefs["reason"].append(f"Age {self.age} - using very slow speech for clarity")
+            elif self.age >= 60:
+                prefs["speed"] = "slow"
+                prefs["reason"].append(f"Age {self.age} - using slower speech")
+            elif self.age < 12:
+                prefs["speed"] = "slow"
+                prefs["reason"].append("Child - using slower speech for comprehension")
+        
+        return prefs
+    
     def get_ai_context(self) -> str:
         """
-        Generate context string for AI to understand the user
-        This is passed to the AI for personalized responses
+        Generate context string for AI to understand the user.
+        This is passed to the AI for personalized responses.
+        
+        Includes:
+        - Basic demographics with age-specific considerations
+        - Medical history and allergies (CRITICAL)
+        - Current medications (for interaction checks)
+        - Lifestyle factors
+        - Previous symptoms
         """
         context_parts = []
         
-        # Basic info
+        # Basic info with age-specific considerations
         if self.name:
             context_parts.append(f"Patient name: {self.name}")
+        
         if self.age:
-            context_parts.append(f"Age: {self.age} years")
+            age_group = self.get_age_group()
+            age_note = ""
+            if age_group == "child":
+                age_note = " (CHILD - use simple language, consider pediatric dosing)"
+            elif age_group == "teenager":
+                age_note = " (teenager - be mindful of adolescent health concerns)"
+            elif age_group == "senior":
+                age_note = " (senior - consider age-related conditions, simpler explanations)"
+            elif age_group == "elderly":
+                age_note = " (ELDERLY - use very clear, simple language; consider polypharmacy risks)"
+            context_parts.append(f"Age: {self.age} years{age_note}")
+        
         if self.gender:
             context_parts.append(f"Gender: {self.gender.value}")
         
-        # Medical conditions
+        # BMI if available
+        if self.height_cm and self.weight_kg:
+            bmi = self.weight_kg / ((self.height_cm / 100) ** 2)
+            bmi_category = "underweight" if bmi < 18.5 else "normal" if bmi < 25 else "overweight" if bmi < 30 else "obese"
+            context_parts.append(f"BMI: {bmi:.1f} ({bmi_category})")
+        
+        # Medical conditions - CRITICAL for diagnosis
         if self.medical_conditions:
             active_conditions = [c.name for c in self.medical_conditions if c.is_active]
             if active_conditions:
-                context_parts.append(f"Known conditions: {', '.join(active_conditions)}")
+                context_parts.append(f"⚠️ EXISTING CONDITIONS: {', '.join(active_conditions)}")
         
-        # Allergies (IMPORTANT for medication suggestions)
+        # Allergies (MOST IMPORTANT for medication suggestions)
         if self.allergies:
             allergy_list = [f"{a.allergen} ({a.severity})" for a in self.allergies]
-            context_parts.append(f"⚠️ ALLERGIES: {', '.join(allergy_list)}")
+            context_parts.append(f"🚨 ALLERGIES (DO NOT PRESCRIBE): {', '.join(allergy_list)}")
         
         # Current medications (for interaction warnings)
         if self.current_medications:
-            med_list = [m.name for m in self.current_medications]
-            context_parts.append(f"Current medications: {', '.join(med_list)}")
+            med_list = [f"{m.name}" + (f" ({m.dosage})" if m.dosage else "") for m in self.current_medications]
+            context_parts.append(f"💊 Current medications: {', '.join(med_list)}")
         
-        # Family history
+        # Family history - important for genetic predispositions
         if self.family_history:
             context_parts.append(f"Family history: {', '.join(self.family_history)}")
         
-        # Recurring symptoms
+        # Recurring symptoms - might indicate chronic condition
         if self.recurring_symptoms:
-            context_parts.append(f"Recurring symptoms: {', '.join(self.recurring_symptoms)}")
+            context_parts.append(f"Recurring/chronic symptoms: {', '.join(self.recurring_symptoms)}")
         
         # Previous consultations summary
         if self.consultation_history:
             recent = self.consultation_history[-3:]  # Last 3 consultations
-            recent_symptoms = []
+            recent_conditions = []
             for c in recent:
-                recent_symptoms.extend(c.symptoms)
-            if recent_symptoms:
-                context_parts.append(f"Recent symptoms reported: {', '.join(set(recent_symptoms))}")
+                recent_conditions.extend(c.conditions_suggested)
+            if recent_conditions:
+                context_parts.append(f"Recently suggested conditions: {', '.join(set(recent_conditions))}")
         
         # Lifestyle factors
         lifestyle = []
         if self.smoking:
-            lifestyle.append("smoker")
+            lifestyle.append("smoker (increased respiratory/cardiovascular risk)")
         if self.alcohol == "regular":
-            lifestyle.append("regular alcohol use")
+            lifestyle.append("regular alcohol use (consider liver/medication interactions)")
+        if self.exercise_frequency == "none":
+            lifestyle.append("sedentary lifestyle")
         if lifestyle:
             context_parts.append(f"Lifestyle factors: {', '.join(lifestyle)}")
+        
+        # Add age-specific instructions for AI
+        if self.age:
+            if self.age >= 65:
+                context_parts.append("\n📋 SENIOR PATIENT GUIDELINES: Use simpler language, avoid complex medical jargon, consider reduced dosages, be aware of common elderly conditions (arthritis, hypertension, diabetes).")
+            elif self.age < 12:
+                context_parts.append("\n📋 PEDIATRIC GUIDELINES: Explain in child-friendly terms, always recommend parental supervision, use pediatric dosing only.")
         
         return "\n".join(context_parts) if context_parts else "No medical history on file."
     
@@ -285,6 +369,8 @@ class ProfileCreateRequest(BaseModel):
     age: Optional[int] = None
     gender: Optional[str] = None
     blood_type: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
     preferred_language: str = "en"
     allergies: Optional[List[str]] = None  # List of allergy names
     chronic_conditions: Optional[List[str]] = None  # List of condition names

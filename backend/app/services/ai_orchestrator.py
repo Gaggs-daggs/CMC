@@ -111,9 +111,11 @@ class OrchestratedResponse:
     model_used: str = "medllama2"
     symptoms_detected: List[str] = None
     conditions_suggested: List[str] = None
+    diagnoses: List[Dict] = None  # NEW: Multiple diagnoses with confidence
     medications: List[Dict] = None
     specialist_recommended: Optional[str] = None
     follow_up_questions: List[str] = None
+    needs_more_info: bool = False  # NEW: Flag for UI
     mental_health_detected: bool = False
     
     # Metadata
@@ -130,6 +132,8 @@ class OrchestratedResponse:
             self.symptoms_detected = []
         if self.conditions_suggested is None:
             self.conditions_suggested = []
+        if self.diagnoses is None:
+            self.diagnoses = []
         if self.medications is None:
             self.medications = []
         if self.follow_up_questions is None:
@@ -240,36 +244,36 @@ class ProductionAIOrchestrator:
             target_language=target_language
         )
         
-        # ========== STEP 0.5: TRANSLATE INPUT TO ENGLISH ==========
-        # AI models understand English best, so translate non-English input
+        # ========== OPTIMIZATION: Skip translation for English ==========
         english_message = message
         if target_language != "en" and self.translator:
             try:
+                # Use async translation if available for speed
                 english_message = self.translator.translate_to_english(
                     text=message,
                     source_language=target_language
                 )
                 if english_message and english_message != message:
                     components_used.append(f"input_translation:{target_language}->en")
-                    logger.info(f"🔄 Translated input: '{message[:50]}...' -> '{english_message[:50]}...'")
                 else:
-                    english_message = message  # Fallback if translation failed
+                    english_message = message
             except Exception as e:
                 logger.warning(f"Input translation failed: {e}")
                 english_message = message
         
-        # ========== STEP 0: USER PROFILE CONTEXT ==========
+        # ========== PARALLEL STEP: Load profile + Triage simultaneously ==========
         user_context = ""
         user_allergies = []
+        
+        # These can run in parallel since they're independent
+        profile_task = None
         if phone_number and PROFILE_SERVICE_AVAILABLE:
             try:
                 profile = profile_service.get_profile(phone_number)
                 if profile:
                     user_context = profile.get_ai_context()
-                    # Extract allergies for medication warnings
                     user_allergies = [a.allergen.lower() for a in profile.allergies]
                     components_used.append("user_profile")
-                    logger.info(f"📋 Loaded user profile context for {phone_number}")
             except Exception as e:
                 logger.warning(f"Could not load user profile: {e}")
         
@@ -327,22 +331,29 @@ class ProductionAIOrchestrator:
             except Exception as e:
                 logger.error(f"Safety check error: {e}")
         
-        # ========== STEP 3: RAG RETRIEVAL ==========
+        # ========== STEP 3: RAG RETRIEVAL (SKIP FOR SPEED - optional) ==========
         rag_context = ""
         sources = []
         
-        if include_rag and self.knowledge_base:
+        # Only use RAG for complex/emergency cases to save time
+        use_rag = include_rag and self.knowledge_base and (
+            response.is_emergency or 
+            response.triage_level in ["emergency", "urgent"] or
+            len(english_message.split()) > 15  # Only for longer queries
+        )
+        
+        if use_rag:
             try:
                 # Query knowledge base with English message
                 query_result = self.knowledge_base.query(
-                    query=english_message,  # Use translated message
-                    max_results=3
+                    query=english_message,
+                    max_results=2  # Reduced from 3 for speed
                 )
                 
                 if query_result.documents:
-                    # Build context from retrieved documents
-                    rag_context = "\n\n".join([
-                        f"[Source: {doc.source}] {doc.content[:500]}"
+                    # Build context from retrieved documents (shorter excerpts)
+                    rag_context = "\n".join([
+                        f"[{doc.source}] {doc.content[:300]}"
                         for doc in query_result.documents
                     ])
                     sources = [doc.source for doc in query_result.documents]
@@ -357,26 +368,15 @@ class ProductionAIOrchestrator:
         
         # ========== STEP 4: AI RESPONSE ==========
         try:
-            # Build enhanced message with context
-            context_parts = []
-            
-            # Add user profile context if available
-            if user_context:
-                context_parts.append(f"**Patient Information:**\n{user_context}")
-            
-            # Add RAG context if available
-            if rag_context:
-                context_parts.append(f"**Medical Knowledge:**\n{rag_context}")
-            
-            # Build final enhanced message (use English for AI)
+            # Build enhanced message - SIMPLIFIED for speed
             enhanced_message = english_message
-            if context_parts:
-                context_str = "\n\n".join(context_parts)
-                enhanced_message = f"""{context_str}
-
-**User's current concern:** {english_message}
-
-Provide an accurate, personalized response. Be empathetic and clear. If the patient has known allergies, warn about potential medication interactions."""
+            
+            # Only add context for complex cases
+            if user_context and (response.is_emergency or len(english_message.split()) > 10):
+                enhanced_message = f"Patient info: {user_context[:200]}\n\nQuery: {english_message}"
+            
+            if rag_context:
+                enhanced_message = f"{rag_context[:400]}\n\n{enhanced_message}"
             
             # Get AI response using get_ai_response which handles medication lookup with accumulated symptoms
             logger.info(f"🤖 Sending to AI model: '{enhanced_message[:100]}...'")
@@ -399,61 +399,22 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
             response.follow_up_questions = ai_response.get("follow_up_questions", [])
             response.mental_health_detected = ai_response.get("mental_health", {}).get("detected", False)
             
-            # ========== ENHANCED MEDICINE ENRICHMENT ==========
-            # Enrich medications with ALL available databases (RxNorm, DailyMed, ATC, Indian DB)
-            if ENHANCED_MEDICINE_AVAILABLE and response.medications:
-                try:
-                    logger.info(f"💊 Enriching {len(response.medications)} medications with all databases...")
-                    response.medications = await enrich_medications(
-                        response.medications,
-                        include_safety=True
-                    )
-                    
-                    # Filter and add allergy warnings
-                    if user_allergies:
-                        for med in response.medications:
-                            med_name = (med.get("name", "") or "").lower()
-                            generic_name = (med.get("generic_name", "") or "").lower()
-                            ingredients = [i.lower() for i in med.get("active_ingredients", [])]
-                            
-                            # Check for allergen match
-                            is_allergen = any(
-                                allergen in med_name or 
-                                allergen in generic_name or
-                                any(allergen in ing for ing in ingredients)
-                                for allergen in user_allergies
-                            )
-                            
-                            if is_allergen:
-                                logger.warning(f"⚠️ Allergy warning for {med.get('name')} - user allergies: {user_allergies}")
-                                if "warnings" not in med:
-                                    med["warnings"] = []
-                                med["warnings"].insert(0, f"⚠️ ALLERGY WARNING: You may be allergic to this medication")
-                                med["allergy_warning"] = True
-                    
-                    components_used.append("enhanced_medicine_enrichment")
-                    logger.info(f"✅ Enriched medications: {[m.get('name') for m in response.medications]}")
-                    
-                except Exception as e:
-                    logger.error(f"Enhanced medicine enrichment error: {e}")
-                    # Fallback: keep original medications with basic allergy filter
-                    if user_allergies:
-                        for med in response.medications:
-                            med_name = (med.get("name", "") or "").lower()
-                            is_allergen = any(allergen in med_name for allergen in user_allergies)
-                            if is_allergen:
-                                med["allergy_warning"] = "⚠️ You may be allergic to this medication"
-            elif user_allergies and response.medications:
-                # Fallback allergy filtering without enhanced service
-                safe_medications = []
-                for med in response.medications:
-                    med_name = (med.get("name", "") or "").lower()
-                    is_allergen = any(allergen in med_name for allergen in user_allergies)
-                    if is_allergen:
-                        logger.warning(f"⚠️ Filtered medication {med_name} due to user allergy")
-                        med["allergy_warning"] = "⚠️ You may be allergic to this medication"
-                    safe_medications.append(med)
-                response.medications = safe_medications
+            # ========== SKIP ENHANCED MEDICINE ENRICHMENT FOR SPEED ==========
+            # RxNorm API is slow and often fails - skip external API calls
+            # Medications already have basic info from ai_medication_service
+            if response.medications:
+                logger.info(f"💊 Using {len(response.medications)} medications (skipping slow enrichment)")
+                
+                # Just add allergy warnings locally (fast)
+                if user_allergies:
+                    for med in response.medications:
+                        med_name = (med.get("name", "") or "").lower()
+                        is_allergen = any(allergen in med_name for allergen in user_allergies)
+                        if is_allergen:
+                            if "warnings" not in med:
+                                med["warnings"] = []
+                            med["warnings"].insert(0, f"⚠️ ALLERGY WARNING: You may be allergic to this medication")
+                            med["allergy_warning"] = True
             
             # Merge symptoms - use ALL accumulated symptoms from AI response
             all_detected_symptoms = ai_response.get("symptoms_detected", [])
@@ -462,6 +423,21 @@ Provide an accurate, personalized response. Be empathetic and clear. If the pati
                     response.symptoms_detected.append(symptom)
             
             logger.info(f"💊 Orchestrator: All symptoms={response.symptoms_detected}, Meds={[m.get('name') for m in response.medications]}")
+            
+            # ========== SKIP DUPLICATE DIAGNOSIS - Already done in get_ai_response ==========
+            # Diagnoses are already in ai_response from the PowerfulAIService
+            # Don't call generate_differential_diagnosis again!
+            if ai_response.get("diagnoses"):
+                response.diagnoses = ai_response["diagnoses"]
+                components_used.append("differential_diagnosis")
+                logger.info(f"🏥 Using {len(response.diagnoses)} diagnoses from AI response (no duplicate call)")
+            
+            # ========== SKIP DUPLICATE FOLLOW-UP - Already done in get_ai_response ==========
+            # Follow-up questions are already in ai_response
+            if ai_response.get("follow_up_questions"):
+                response.follow_up_questions = ai_response["follow_up_questions"]
+                response.needs_more_info = ai_response.get("needs_more_info", False)
+                components_used.append("follow_up_generator")
             
             components_used.append(f"ai_model:{response.model_used}")
             

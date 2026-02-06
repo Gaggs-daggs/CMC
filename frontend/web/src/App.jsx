@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import './App.premium.css'
 import WebGLBackground from './components/WebGLBackground'
 import SessionSidebar from './components/SessionSidebar'
+import BodySelector, { BodyIcon } from './components/BodySelector'
+import SpecialistFinder from './components/SpecialistFinder'
 import {
   MedicalCrossIcon,
   HeartPulseIcon,
@@ -58,6 +60,120 @@ const getSpeechLang = (lang) => {
     as:'as-IN', ne:'ne-NP'
   }
   return m[lang] || 'en-IN'
+}
+
+// Symptom Information Database - Multilingual
+const SYMPTOM_INFO = {
+  headache: {
+    en: { name: 'Headache', description: 'Pain in any part of the head, ranging from sharp to dull aching.', causes: 'Tension, dehydration, lack of sleep, eye strain, stress, or underlying conditions.', homeRemedies: 'Rest in a dark room, stay hydrated, apply cold compress, take OTC pain relievers.', whenToSeeDoctor: 'Severe sudden headache, headache with fever/stiff neck, or recurring headaches.' },
+    hi: { name: 'सिरदर्द', description: 'सिर के किसी भी हिस्से में दर्द, तेज से लेकर हल्का दर्द।', causes: 'तनाव, निर्जलीकरण, नींद की कमी, आंखों पर जोर, तनाव।', homeRemedies: 'अंधेरे कमरे में आराम करें, पानी पिएं, ठंडी सिकाई करें।', whenToSeeDoctor: 'अचानक तेज सिरदर्द, बुखार के साथ सिरदर्द।' },
+    ta: { name: 'தலைவலி', description: 'தலையின் எந்த பகுதியிலும் வலி.', causes: 'மன அழுத்தம், நீரிழப்பு, தூக்கமின்மை.', homeRemedies: 'இருண்ட அறையில் ஓய்வு, நீர் அருந்துங்கள்.', whenToSeeDoctor: 'திடீர் கடுமையான தலைவலி, காய்ச்சலுடன் தலைவலி.' },
+    te: { name: 'తలనొప్పి', description: 'తల యొక్క ఏ భాగంలోనైనా నొప్పి.', causes: 'ఒత్తిడి, నిర్జలీకరణం, నిద్ర లేకపోవడం.', homeRemedies: 'చీకటి గదిలో విశ్రాంతి, నీరు తాగండి.', whenToSeeDoctor: 'అకస్మాత్తుగా తీవ్రమైన తలనొప్పి.' },
+    bn: { name: 'মাথাব্যথা', description: 'মাথার যেকোনো অংশে ব্যথা।', causes: 'মানসিক চাপ, পানিশূন্যতা, ঘুমের অভাব।', homeRemedies: 'অন্ধকার ঘরে বিশ্রাম, পানি পান করুন।', whenToSeeDoctor: 'হঠাৎ তীব্র মাথাব্যথা, জ্বরের সাথে মাথাব্যথা।' }
+  },
+  fever: {
+    en: { name: 'Fever', description: 'Body temperature above 100.4°F (38°C), indicating infection or illness.', causes: 'Viral/bacterial infections, inflammation, heat exhaustion, medications.', homeRemedies: 'Rest, drink fluids, cool compress, light clothing, paracetamol if needed.', whenToSeeDoctor: 'Temperature above 103°F, fever lasting 3+ days, with severe symptoms.' },
+    hi: { name: 'बुखार', description: 'शरीर का तापमान 100.4°F से ऊपर, संक्रमण का संकेत।', causes: 'वायरल/बैक्टीरियल संक्रमण, सूजन।', homeRemedies: 'आराम करें, तरल पदार्थ पिएं, ठंडी सिकाई करें।', whenToSeeDoctor: '103°F से ऊपर बुखार, 3 दिनों से अधिक समय तक बुखार।' },
+    ta: { name: 'காய்ச்சல்', description: 'உடல் வெப்பநிலை 100.4°F க்கு மேல்.', causes: 'வைரஸ்/பாக்டீரியா தொற்று.', homeRemedies: 'ஓய்வு, திரவங்கள் குடிக்கவும்.', whenToSeeDoctor: '103°F க்கு மேல் காய்ச்சல்.' },
+    te: { name: 'జ్వరం', description: 'శరీర ఉష్ణోగ్రత 100.4°F పైన.', causes: 'వైరల్/బాక్టీరియల్ ఇన్ఫెక్షన్.', homeRemedies: 'విశ్రాంతి, ద్రవాలు తాగండి.', whenToSeeDoctor: '103°F పైన జ్వరం.' },
+    bn: { name: 'জ্বর', description: 'শরীরের তাপমাত্রা 100.4°F এর উপরে।', causes: 'ভাইরাল/ব্যাকটেরিয়াল সংক্রমণ।', homeRemedies: 'বিশ্রাম, তরল পান করুন।', whenToSeeDoctor: '103°F এর উপরে জ্বর।' }
+  },
+  cough: {
+    en: { name: 'Cough', description: 'Reflex action to clear airways of mucus, irritants, or foreign particles.', causes: 'Cold, flu, allergies, asthma, acid reflux, smoking, infections.', homeRemedies: 'Honey with warm water, ginger tea, steam inhalation, stay hydrated.', whenToSeeDoctor: 'Cough lasting 3+ weeks, blood in cough, difficulty breathing.' },
+    hi: { name: 'खांसी', description: 'वायुमार्ग को साफ करने की प्रतिक्रिया।', causes: 'सर्दी, फ्लू, एलर्जी, अस्थमा।', homeRemedies: 'शहद गर्म पानी में, अदरक की चाय, भाप लें।', whenToSeeDoctor: '3 सप्ताह से अधिक खांसी, खांसी में खून।' },
+    ta: { name: 'இருமல்', description: 'காற்றுப்பாதைகளை சுத்தம் செய்யும் எதிர்வினை.', causes: 'சளி, காய்ச்சல், ஒவ்வாமை.', homeRemedies: 'தேன் வெந்நீரில், இஞ்சி தேநீர்.', whenToSeeDoctor: '3 வாரங்களுக்கு மேல் இருமல்.' },
+    te: { name: 'దగ్గు', description: 'వాయుమార్గాలను శుభ్రం చేసే రిఫ్లెక్స్.', causes: 'జలుబు, ఫ్లూ, అలెర్జీలు.', homeRemedies: 'వేడి నీటిలో తేనె, అల్లం టీ.', whenToSeeDoctor: '3 వారాలకు పైగా దగ్గు.' },
+    bn: { name: 'কাশি', description: 'শ্বাসনালী পরিষ্কার করার প্রতিক্রিয়া।', causes: 'ঠান্ডা, ফ্লু, অ্যালার্জি।', homeRemedies: 'গরম পানিতে মধু, আদা চা।', whenToSeeDoctor: '3 সপ্তাহের বেশি কাশি।' }
+  },
+  'stomach pain': {
+    en: { name: 'Stomach Pain', description: 'Pain or discomfort in the abdominal area between chest and pelvis.', causes: 'Indigestion, gas, food poisoning, gastritis, ulcers, infections.', homeRemedies: 'Warm water, ginger tea, avoid spicy foods, rest, light meals.', whenToSeeDoctor: 'Severe pain, blood in stool, fever with pain, pain lasting days.' },
+    hi: { name: 'पेट दर्द', description: 'छाती और श्रोणि के बीच पेट क्षेत्र में दर्द।', causes: 'अपच, गैस, फूड पॉइज़निंग, गैस्ट्राइटिस।', homeRemedies: 'गर्म पानी, अदरक की चाय, मसालेदार भोजन से बचें।', whenToSeeDoctor: 'तेज दर्द, मल में खून, बुखार के साथ दर्द।' },
+    ta: { name: 'வயிற்று வலி', description: 'வயிற்றுப் பகுதியில் வலி அல்லது அசௌகரியம்.', causes: 'அஜீரணம், வாயு, உணவு நச்சு.', homeRemedies: 'வெந்நீர், இஞ்சி தேநீர்.', whenToSeeDoctor: 'கடுமையான வலி, மலத்தில் இரத்தம்.' },
+    te: { name: 'కడుపు నొప్పి', description: 'పొట్ట ప్రాంతంలో నొప్పి లేదా అసౌకర్యం.', causes: 'అజీర్ణం, గ్యాస్, ఆహార విషం.', homeRemedies: 'వేడి నీరు, అల్లం టీ.', whenToSeeDoctor: 'తీవ్రమైన నొప్పి, మలంలో రక్తం.' },
+    bn: { name: 'পেট ব্যথা', description: 'পেটের অঞ্চলে ব্যথা বা অস্বস্তি।', causes: 'বদহজম, গ্যাস, ফুড পয়জনিং।', homeRemedies: 'গরম পানি, আদা চা।', whenToSeeDoctor: 'তীব্র ব্যথা, মলে রক্ত।' }
+  },
+  'joint pain': {
+    en: { name: 'Joint Pain', description: 'Discomfort, aches, or soreness in any of the body\'s joints.', causes: 'Arthritis, injury, overuse, infection, autoimmune conditions.', homeRemedies: 'Rest the joint, ice/heat therapy, gentle stretching, OTC pain relievers.', whenToSeeDoctor: 'Severe swelling, inability to move joint, fever with joint pain.' },
+    hi: { name: 'जोड़ों का दर्द', description: 'शरीर के किसी भी जोड़ में दर्द या पीड़ा।', causes: 'गठिया, चोट, अत्यधिक उपयोग।', homeRemedies: 'जोड़ को आराम दें, बर्फ/गर्मी चिकित्सा।', whenToSeeDoctor: 'गंभीर सूजन, जोड़ को हिलाने में असमर्थता।' },
+    ta: { name: 'மூட்டு வலி', description: 'உடலின் மூட்டுகளில் வலி அல்லது வலி.', causes: 'மூட்டுவாதம், காயம், அதிக பயன்பாடு.', homeRemedies: 'மூட்டுக்கு ஓய்வு, ஐஸ்/வெப்ப சிகிச்சை.', whenToSeeDoctor: 'கடுமையான வீக்கம், மூட்டை நகர்த்த இயலாமை.' },
+    te: { name: 'కీళ్ల నొప్పి', description: 'శరీరంలోని ఏదైనా కీళ్లలో నొప్పి.', causes: 'ఆర్థరైటిస్, గాయం, అధిక వినియోగం.', homeRemedies: 'కీలుకు విశ్రాంతి, ఐస్/హీట్ థెరపీ.', whenToSeeDoctor: 'తీవ్రమైన వాపు, కీలు కదపలేకపోవడం.' },
+    bn: { name: 'জয়েন্টে ব্যথা', description: 'শরীরের যেকোনো জয়েন্টে ব্যথা।', causes: 'আর্থ্রাইটিস, আঘাত, অতিরিক্ত ব্যবহার।', homeRemedies: 'জয়েন্টকে বিশ্রাম দিন, বরফ/তাপ থেরাপি।', whenToSeeDoctor: 'গুরুতর ফোলা, জয়েন্ট নড়াতে অক্ষমতা।' }
+  },
+  'shoulder pain': {
+    en: { name: 'Shoulder Pain', description: 'Pain in or around the shoulder joint, limiting arm movement.', causes: 'Rotator cuff injury, frozen shoulder, arthritis, tendinitis, overuse.', homeRemedies: 'Rest, ice pack, gentle stretching, OTC pain relievers, proper posture.', whenToSeeDoctor: 'Severe pain, inability to lift arm, swelling, pain after injury.' },
+    hi: { name: 'कंधे का दर्द', description: 'कंधे के जोड़ में या उसके आसपास दर्द।', causes: 'रोटेटर कफ इंजरी, फ्रोजन शोल्डर, गठिया।', homeRemedies: 'आराम, आइस पैक, हल्की स्ट्रेचिंग।', whenToSeeDoctor: 'तेज दर्द, बांह उठाने में असमर्थता।' },
+    ta: { name: 'தோள்பட்டை வலி', description: 'தோள்பட்டை மூட்டில் அல்லது அதைச் சுற்றி வலி.', causes: 'ரோட்டேட்டர் கஃப் காயம், உறைந்த தோள்பட்டை.', homeRemedies: 'ஓய்வு, ஐஸ் பேக், லேசான நீட்சி.', whenToSeeDoctor: 'கடுமையான வலி, கையை உயர்த்த இயலாமை.' },
+    te: { name: 'భుజం నొప్పి', description: 'భుజం కీలు లో లేదా చుట్టూ నొప్పి.', causes: 'రోటేటర్ కఫ్ గాయం, ఫ్రోజెన్ షోల్డర్.', homeRemedies: 'విశ్రాంతి, ఐస్ ప్యాక్, తేలికపాటి స్ట్రెచింగ్.', whenToSeeDoctor: 'తీవ్రమైన నొప్పి, చేయి ఎత్తలేకపోవడం.' },
+    bn: { name: 'কাঁধে ব্যথা', description: 'কাঁধের জয়েন্টে বা তার আশেপাশে ব্যথা।', causes: 'রোটেটর কাফ ইনজুরি, ফ্রোজেন শোল্ডার।', homeRemedies: 'বিশ্রাম, আইস প্যাক, হালকা স্ট্রেচিং।', whenToSeeDoctor: 'তীব্র ব্যথা, হাত তুলতে অক্ষমতা।' }
+  },
+  'allergic reaction': {
+    en: { name: 'Allergic Reaction', description: 'Immune system response to a foreign substance (allergen).', causes: 'Food, pollen, dust, pet dander, medications, insect stings.', homeRemedies: 'Avoid allergen, antihistamines, cool compress for rashes.', whenToSeeDoctor: 'Difficulty breathing, swelling of face/throat, severe rash, anaphylaxis.' },
+    hi: { name: 'एलर्जी प्रतिक्रिया', description: 'किसी विदेशी पदार्थ के प्रति प्रतिरक्षा प्रणाली की प्रतिक्रिया।', causes: 'भोजन, पराग, धूल, दवाएं, कीट के डंक।', homeRemedies: 'एलर्जेन से बचें, एंटीहिस्टामाइन लें।', whenToSeeDoctor: 'सांस लेने में कठिनाई, चेहरे/गले में सूजन।' },
+    ta: { name: 'ஒவ்வாமை எதிர்வினை', description: 'அந்நிய பொருளுக்கு நோயெதிர்ப்பு அமைப்பு பதில்.', causes: 'உணவு, மகரந்தம், தூசி, மருந்துகள்.', homeRemedies: 'ஒவ்வாமையைத் தவிர்க்கவும், ஆன்டிஹிஸ்டமின்கள்.', whenToSeeDoctor: 'சுவாசிப்பதில் சிரமம், முகம்/தொண்டை வீக்கம்.' },
+    te: { name: 'అలెర్జీ ప్రతిచర్య', description: 'విదేశీ పదార్థానికి రోగనిరోధక వ్యవస్థ ప్రతిస్పందన.', causes: 'ఆహారం, పుప్పొడి, దుమ్ము, మందులు.', homeRemedies: 'అలెర్జెన్‌ను నివారించండి, యాంటీహిస్టమిన్లు.', whenToSeeDoctor: 'శ్వాస తీసుకోవడంలో ఇబ్బంది, ముఖం/గొంతు వాపు.' },
+    bn: { name: 'অ্যালার্জি প্রতিক্রিয়া', description: 'বিদেশী পদার্থের প্রতি রোগ প্রতিরোধ ব্যবস্থার প্রতিক্রিয়া।', causes: 'খাবার, পরাগ, ধুলো, ওষুধ।', homeRemedies: 'অ্যালার্জেন এড়িয়ে চলুন, অ্যান্টিহিস্টামিন।', whenToSeeDoctor: 'শ্বাসকষ্ট, মুখ/গলা ফোলা।' }
+  },
+  nausea: {
+    en: { name: 'Nausea', description: 'Uneasiness in the stomach with an urge to vomit.', causes: 'Motion sickness, food poisoning, pregnancy, medications, infections.', homeRemedies: 'Ginger tea, small sips of water, crackers, fresh air, rest.', whenToSeeDoctor: 'Persistent vomiting, blood in vomit, severe dehydration, high fever.' },
+    hi: { name: 'मतली', description: 'उल्टी करने की इच्छा के साथ पेट में बेचैनी।', causes: 'मोशन सिकनेस, फूड पॉइज़निंग, गर्भावस्था।', homeRemedies: 'अदरक की चाय, पानी की छोटी घूंट, क्रैकर्स।', whenToSeeDoctor: 'लगातार उल्टी, उल्टी में खून।' },
+    ta: { name: 'குமட்டல்', description: 'வாந்தி எடுக்க வேண்டும் என்ற உணர்வுடன் வயிற்றில் அசௌகரியம்.', causes: 'மோஷன் சிக்னஸ், உணவு நச்சு, கர்ப்பம்.', homeRemedies: 'இஞ்சி தேநீர், சிறிய மடக்குகளில் தண்ணீர்.', whenToSeeDoctor: 'தொடர்ச்சியான வாந்தி, வாந்தியில் இரத்தம்.' },
+    te: { name: 'వికారం', description: 'వాంతి చేయాలనే కోరికతో కడుపులో అసౌకర్యం.', causes: 'మోషన్ సిక్‌నెస్, ఆహార విషం, గర్భం.', homeRemedies: 'అల్లం టీ, నీటి చిన్న చుక్కలు.', whenToSeeDoctor: 'నిరంతర వాంతులు, వాంతిలో రక్తం.' },
+    bn: { name: 'বমি বমি ভাব', description: 'বমি করার তাগিদ সহ পেটে অস্বস্তি।', causes: 'মোশন সিকনেস, ফুড পয়জনিং, গর্ভাবস্থা।', homeRemedies: 'আদা চা, অল্প পানি।', whenToSeeDoctor: 'ক্রমাগত বমি, বমিতে রক্ত।' }
+  },
+  anxiety: {
+    en: { name: 'Anxiety', description: 'Feeling of worry, nervousness, or unease about something.', causes: 'Stress, trauma, genetics, medical conditions, caffeine, life changes.', homeRemedies: 'Deep breathing, meditation, exercise, limit caffeine, talk to someone.', whenToSeeDoctor: 'Persistent anxiety affecting daily life, panic attacks, depression.' },
+    hi: { name: 'चिंता', description: 'किसी बात को लेकर चिंता, घबराहट या बेचैनी।', causes: 'तनाव, आघात, आनुवंशिकी, कैफीन।', homeRemedies: 'गहरी सांस लेना, ध्यान, व्यायाम।', whenToSeeDoctor: 'दैनिक जीवन को प्रभावित करने वाली लगातार चिंता।' },
+    ta: { name: 'பதட்டம்', description: 'எதையாவது பற்றிய கவலை, பதட்டம் அல்லது அமைதியின்மை உணர்வு.', causes: 'மன அழுத்தம், அதிர்ச்சி, மரபியல்.', homeRemedies: 'ஆழ்ந்த சுவாசம், தியானம், உடற்பயிற்சி.', whenToSeeDoctor: 'அன்றாட வாழ்க்கையை பாதிக்கும் தொடர்ச்சியான பதட்டம்.' },
+    te: { name: 'ఆందోళన', description: 'ఏదైనా గురించి ఆందోళన, భయం లేదా అశాంతి భావన.', causes: 'ఒత్తిడి, ట్రామా, జన్యుశాస్త్రం.', homeRemedies: 'లోతైన శ్వాస, ధ్యానం, వ్యాయామం.', whenToSeeDoctor: 'రోజువారీ జీవితాన్ని ప్రభావితం చేసే నిరంతర ఆందోళన.' },
+    bn: { name: 'উদ্বেগ', description: 'কোনো কিছু নিয়ে চিন্তা, নার্ভাসনেস বা অস্বস্তির অনুভূতি।', causes: 'মানসিক চাপ, ট্রমা, জেনেটিক্স।', homeRemedies: 'গভীর শ্বাস, ধ্যান, ব্যায়াম।', whenToSeeDoctor: 'দৈনন্দিন জীবনকে প্রভাবিত করা ক্রমাগত উদ্বেগ।' }
+  },
+  vomiting: {
+    en: { name: 'Vomiting', description: 'Forceful expulsion of stomach contents through the mouth.', causes: 'Food poisoning, infections, motion sickness, pregnancy, medications.', homeRemedies: 'Clear fluids, rest, avoid solid food initially, ginger, ORS.', whenToSeeDoctor: 'Blood in vomit, severe dehydration, fever, vomiting 24+ hours.' },
+    hi: { name: 'उल्टी', description: 'मुंह से पेट की सामग्री का जबरन निष्कासन।', causes: 'फूड पॉइज़निंग, संक्रमण, मोशन सिकनेस।', homeRemedies: 'साफ तरल पदार्थ, आराम, अदरक, ORS।', whenToSeeDoctor: 'उल्टी में खून, गंभीर निर्जलीकरण।' },
+    ta: { name: 'வாந்தி', description: 'வாய் வழியாக வயிற்றின் உள்ளடக்கங்களை வலுக்கட்டாயமாக வெளியேற்றுதல்.', causes: 'உணவு நச்சு, தொற்று, மோஷன் சிக்னஸ்.', homeRemedies: 'தெளிவான திரவங்கள், ஓய்வு, இஞ்சி, ORS.', whenToSeeDoctor: 'வாந்தியில் இரத்தம், கடுமையான நீரிழப்பு.' },
+    te: { name: 'వాంతి', description: 'నోటి ద్వారా కడుపులోని పదార్థాలను బలవంతంగా బయటకు పంపడం.', causes: 'ఆహార విషం, ఇన్ఫెక్షన్, మోషన్ సిక్‌నెస్.', homeRemedies: 'క్లియర్ ఫ్లూయిడ్స్, విశ్రాంతి, అల్లం, ORS.', whenToSeeDoctor: 'వాంతిలో రక్తం, తీవ్రమైన నిర్జలీకరణం.' },
+    bn: { name: 'বমি', description: 'মুখ দিয়ে পেটের বিষয়বস্তু জোরপূর্বক বের করা।', causes: 'ফুড পয়জনিং, সংক্রমণ, মোশন সিকনেস।', homeRemedies: 'পরিষ্কার তরল, বিশ্রাম, আদা, ORS।', whenToSeeDoctor: 'বমিতে রক্ত, গুরুতর ডিহাইড্রেশন।' }
+  },
+  dizziness: {
+    en: { name: 'Dizziness', description: 'Feeling of being lightheaded, unsteady, or faint.', causes: 'Low blood pressure, dehydration, inner ear issues, anemia, medications.', homeRemedies: 'Sit or lie down, drink water, avoid sudden movements, eat something.', whenToSeeDoctor: 'Frequent episodes, fainting, chest pain, severe headache.' },
+    hi: { name: 'चक्कर आना', description: 'सिर हल्का, अस्थिर या बेहोश होने का एहसास।', causes: 'निम्न रक्तचाप, निर्जलीकरण, कान की समस्या।', homeRemedies: 'बैठ जाएं या लेट जाएं, पानी पिएं।', whenToSeeDoctor: 'बार-बार एपिसोड, बेहोशी, छाती में दर्द।' },
+    ta: { name: 'தலைச்சுற்றல்', description: 'தலை இலேசாக, நிலையற்றதாக அல்லது மயக்கமாக உணர்வது.', causes: 'குறைந்த இரத்த அழுத்தம், நீரிழப்பு.', homeRemedies: 'உட்காருங்கள் அல்லது படுங்கள், தண்ணீர் குடிக்கவும்.', whenToSeeDoctor: 'அடிக்கடி எபிசோடுகள், மயக்கம்.' },
+    te: { name: 'తల తిరగడం', description: 'తల తేలికగా, అస్థిరంగా లేదా మూర్ఛపోతున్నట్లు అనిపించడం.', causes: 'తక్కువ బ్లడ్ ప్రెషర్, నిర్జలీకరణం.', homeRemedies: 'కూర్చోండి లేదా పడుకోండి, నీరు తాగండి.', whenToSeeDoctor: 'తరచుగా ఎపిసోడ్లు, మూర్ఛ.' },
+    bn: { name: 'মাথা ঘোরা', description: 'মাথা হালকা, অস্থির বা অজ্ঞান হওয়ার অনুভূতি।', causes: 'নিম্ন রক্তচাপ, পানিশূন্যতা।', homeRemedies: 'বসুন বা শুয়ে পড়ুন, পানি পান করুন।', whenToSeeDoctor: 'ঘন ঘন পর্ব, অজ্ঞান হওয়া।' }
+  },
+  fatigue: {
+    en: { name: 'Fatigue', description: 'Extreme tiredness resulting from physical or mental exertion.', causes: 'Lack of sleep, poor diet, stress, anemia, thyroid issues, depression.', homeRemedies: 'Get adequate sleep, balanced diet, exercise, reduce stress.', whenToSeeDoctor: 'Persistent fatigue for weeks, unexplained weight loss, severe weakness.' },
+    hi: { name: 'थकान', description: 'शारीरिक या मानसिक परिश्रम से अत्यधिक थकावट।', causes: 'नींद की कमी, खराब आहार, तनाव।', homeRemedies: 'पर्याप्त नींद लें, संतुलित आहार।', whenToSeeDoctor: 'हफ्तों तक लगातार थकान।' },
+    ta: { name: 'சோர்வு', description: 'உடல் அல்லது மன உழைப்பின் விளைவாக தீவிர சோர்வு.', causes: 'தூக்கமின்மை, மோசமான உணவு, மன அழுத்தம்.', homeRemedies: 'போதுமான தூக்கம், சமச்சீர் உணவு.', whenToSeeDoctor: 'வாரங்களாக தொடர்ச்சியான சோர்வு.' },
+    te: { name: 'అలసట', description: 'శారీరక లేదా మానసిక శ్రమ వల్ల తీవ్రమైన అలసట.', causes: 'నిద్ర లేకపోవడం, పేద ఆహారం, ఒత్తిడి.', homeRemedies: 'తగినంత నిద్ర పొందండి, సమతుల్య ఆహారం.', whenToSeeDoctor: 'వారాల తరబడి నిరంతర అలసట.' },
+    bn: { name: 'ক্লান্তি', description: 'শারীরিক বা মানসিক পরিশ্রমের ফলে চরম ক্লান্তি।', causes: 'ঘুমের অভাব, খারাপ খাদ্য, মানসিক চাপ।', homeRemedies: 'পর্যাপ্ত ঘুম, সুষম খাদ্য।', whenToSeeDoctor: 'সপ্তাহ ধরে ক্রমাগত ক্লান্তি।' }
+  }
+}
+
+// Function to get symptom details in current language
+const getSymptomInfo = (symptom, lang) => {
+  const symptomLower = symptom.toLowerCase()
+  
+  // Try exact match first
+  if (SYMPTOM_INFO[symptomLower]) {
+    return SYMPTOM_INFO[symptomLower][lang] || SYMPTOM_INFO[symptomLower]['en']
+  }
+  
+  // Try partial match
+  for (const [key, value] of Object.entries(SYMPTOM_INFO)) {
+    if (symptomLower.includes(key) || key.includes(symptomLower)) {
+      return value[lang] || value['en']
+    }
+  }
+  
+  // Return generic info if not found
+  return {
+    name: symptom,
+    description: lang === 'en' ? 'A symptom that requires medical attention.' : 'एक लक्षण जिसे चिकित्सा ध्यान देने की आवश्यकता है।',
+    causes: lang === 'en' ? 'Various causes possible.' : 'विभिन्न कारण संभव।',
+    homeRemedies: lang === 'en' ? 'Consult a healthcare provider for proper guidance.' : 'उचित मार्गदर्शन के लिए स्वास्थ्य सेवा प्रदाता से परामर्श करें।',
+    whenToSeeDoctor: lang === 'en' ? 'If symptoms persist or worsen.' : 'यदि लक्षण बने रहें या बिगड़ जाएं।'
+  }
 }
 
 // Premium icon wrappers with consistent sizing
@@ -302,6 +418,35 @@ export default function App() {
   const [showCrisisBanner, setShowCrisisBanner] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   
+  // User preferences from profile (for TTS speed, voice, etc.)
+  const [userPrefs, setUserPrefs] = useState(savedSession?.userPrefs || {
+    tts_gender: 'female',
+    tts_speed: 'normal',
+    age_group: 'adult',
+    has_allergies: false,
+    has_conditions: false
+  })
+  
+  // NEW: Follow-up questions and diagnoses
+  const [followUpQuestions, setFollowUpQuestions] = useState([])
+  const [diagnoses, setDiagnoses] = useState([])
+  const [showDiagnosisPanel, setShowDiagnosisPanel] = useState(false)
+  
+  // NEW: Symptom details popup
+  const [selectedSymptom, setSelectedSymptom] = useState(null)
+  const [showSymptomDetails, setShowSymptomDetails] = useState(false)
+  
+  // NEW: Condition details modal
+  const [selectedCondition, setSelectedCondition] = useState(null)
+  const [showConditionDetails, setShowConditionDetails] = useState(false)
+  const [conditionDetailsLoading, setConditionDetailsLoading] = useState(false)
+  
+  // NEW: 3D Body selector for pain location
+  const [showBodySelector, setShowBodySelector] = useState(false)
+  
+  // NEW: Specialist finder for nearby doctors & online consultation
+  const [showSpecialistFinder, setShowSpecialistFinder] = useState(false)
+  
   const chatEndRef = useRef(null)
   const recognitionRef = useRef(null)
   const imageInputRef = useRef(null)
@@ -311,9 +456,9 @@ export default function App() {
   // Save session whenever state changes
   useEffect(() => {
     if (sessionId || messages.length > 0) {
-      saveSession({ view, phone, language, detectedLang, sessionId, messages, vitals, symptoms: detectedSymptoms, urgency: urgencyLevel, triage: triageInfo, mentalHealth: mentalHealthInfo })
+      saveSession({ view, phone, language, detectedLang, sessionId, messages, vitals, symptoms: detectedSymptoms, urgency: urgencyLevel, triage: triageInfo, mentalHealth: mentalHealthInfo, userPrefs })
     }
-  }, [view, phone, language, detectedLang, sessionId, messages, vitals, detectedSymptoms, urgencyLevel, triageInfo, mentalHealthInfo])
+  }, [view, phone, language, detectedLang, sessionId, messages, vitals, detectedSymptoms, urgencyLevel, triageInfo, mentalHealthInfo, userPrefs])
 
   // Check for emergency symptoms
   useEffect(() => {
@@ -359,11 +504,26 @@ export default function App() {
     setIsSpeaking(true)
     
     try {
-      // Use backend Edge TTS for high-quality neural voices
+      // Use backend Edge TTS with user preferences for personalized voice
+      const ttsRequest = { 
+        text: clean, 
+        language: lang,
+        gender: userPrefs.tts_gender || 'female',
+        speed: userPrefs.tts_speed || 'normal'
+      }
+      
+      // Log TTS settings for debugging
+      console.log('🔊 TTS Request:', { 
+        lang, 
+        gender: ttsRequest.gender, 
+        speed: ttsRequest.speed,
+        age_group: userPrefs.age_group 
+      })
+      
       const res = await fetch(`${API_BASE}/tts/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean, language: lang, slow: false })
+        body: JSON.stringify(ttsRequest)
       })
       
       if (!res.ok) throw new Error('TTS failed')
@@ -556,9 +716,36 @@ export default function App() {
       const checkData = await checkRes.json()
       
       if (checkData.exists) {
-        // Returning user - fetch full profile and start chat
+        // Returning user - fetch FULL profile data
         setIsReturningUser(true)
-        setProfileData(checkData)
+        
+        // Fetch full profile details
+        try {
+          const profileRes = await fetch(`${API_BASE}/profile/${encodeURIComponent(phone)}`)
+          const profileJson = await profileRes.json()
+          if (profileJson.success && profileJson.profile) {
+            // Store full profile data for sidebar
+            setProfileData({ ...checkData, profile: profileJson.profile })
+            // Also populate the profile form for editing
+            const p = profileJson.profile
+            setProfileForm({
+              name: p.name || '',
+              age: p.age?.toString() || '',
+              gender: p.gender || 'not_specified',
+              blood_type: p.blood_type || '',
+              height_cm: p.height_cm?.toString() || '',
+              weight_kg: p.weight_kg?.toString() || '',
+              allergies: p.allergies?.map(a => a.name || a) || [],
+              conditions: p.medical_conditions?.map(c => c.name || c) || []
+            })
+          } else {
+            setProfileData(checkData)
+          }
+        } catch (profileErr) {
+          console.warn('Could not fetch full profile:', profileErr)
+          setProfileData(checkData)
+        }
+        
         await startChat(checkData.profile_name)
       } else {
         // New user - show profile creation form
@@ -648,9 +835,89 @@ export default function App() {
     setLoading(false)
   }
 
+  // Handle body part selection from 3D body selector
+  const handleBodyPartsSelected = (symptoms, bodyPartNames) => {
+    console.log('🫀 Body parts selected:', bodyPartNames)
+    console.log('🩺 Symptoms from body parts:', symptoms)
+    
+    // Add symptoms to detected symptoms
+    setDetectedSymptoms(prev => {
+      const newSymptoms = [...prev]
+      symptoms.forEach(s => {
+        if (!newSymptoms.includes(s)) {
+          newSymptoms.push(s)
+        }
+      })
+      return newSymptoms
+    })
+    
+    // Create a message about the pain locations and send it
+    const painMessage = `I have pain in my ${bodyPartNames.join(', ')}`
+    
+    // Add user message showing what they selected
+    setMessages(m => [...m, { 
+      role: 'user', 
+      text: `🫀 ${painMessage}`, 
+      time: new Date(),
+      isBodySelection: true 
+    }])
+    
+    // Send this as a message to get diagnosis
+    setTimeout(() => {
+      sendMsg(painMessage)
+    }, 100)
+  }
+
+  // Fetch detailed info about a condition - uses fast llama3.2:3b model (~2-3 sec)
+  const fetchConditionDetails = async (condition) => {
+    setSelectedCondition(condition)
+    setShowConditionDetails(true)
+    setConditionDetailsLoading(true)
+    
+    try {
+      // Use the fast condition-info endpoint
+      const res = await fetch(`${API_BASE}/condition-info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition: condition.condition })
+      })
+      
+      const data = await res.json()
+      
+      setSelectedCondition({
+        ...condition,
+        detailedInfo: data.info || condition.description
+      })
+    } catch (error) {
+      console.error('Error fetching condition details:', error)
+      setSelectedCondition({
+        ...condition,
+        detailedInfo: condition.description || 'Details not available.'
+      })
+    } finally {
+      setConditionDetailsLoading(false)
+    }
+  }
+
   const sendMsg = async (override) => {
     const msg = override || input
     if (!msg.trim() || loading) return
+    
+    // Check if user mentions pain - offer 3D body selector
+    const painKeywords = ['pain', 'hurt', 'hurts', 'ache', 'aching', 'sore', 'painful', 
+                          'வலி', 'நோவு', 'दर्द', 'పెయిన్', 'നോവ്', 'ব্যথা']
+    const msgLower = msg.toLowerCase()
+    const mentionsPain = painKeywords.some(k => msgLower.includes(k))
+    
+    // If mentions pain but no specific body part, offer the selector
+    const bodyParts = ['head', 'chest', 'back', 'stomach', 'arm', 'leg', 'knee', 'shoulder', 'neck', 'eye', 'ear', 'throat']
+    const hasBodyPart = bodyParts.some(p => msgLower.includes(p))
+    
+    if (mentionsPain && !hasBodyPart) {
+      // Show the 3D body selector to help locate pain
+      setShowBodySelector(true)
+      // Still continue with the message so user gets a response
+    }
     
     // Detect language from user's message
     const msgLang = detectLanguage(msg)
@@ -740,6 +1007,21 @@ export default function App() {
         setSuggestedMeds([]) // Clear if no medications in response
       }
       
+      // NEW: Update follow-up questions
+      if (data.follow_up_questions?.length > 0) {
+        console.log('❓ Follow-up questions:', data.follow_up_questions)
+        setFollowUpQuestions(data.follow_up_questions)
+      } else {
+        setFollowUpQuestions([])
+      }
+      
+      // NEW: Update diagnoses with confidence
+      if (data.diagnoses?.length > 0) {
+        console.log('🏥 Diagnoses:', data.diagnoses)
+        setDiagnoses(data.diagnoses)
+        setShowDiagnosisPanel(true)
+      }
+      
       // Update triage information
       if (data.triage) {
         setTriageInfo(data.triage)
@@ -756,6 +1038,15 @@ export default function App() {
         } else if (data.mental_health.severity === 'moderate' || data.mental_health.severity === 'high') {
           setShowMentalHealthSupport(true)
         }
+      }
+      
+      // Update user preferences from profile (for TTS speed, voice gender, etc.)
+      if (data.user_preferences) {
+        console.log('👤 User preferences from profile:', data.user_preferences)
+        setUserPrefs(prev => ({
+          ...prev,
+          ...data.user_preferences
+        }))
       }
       
       speak(txt)
@@ -813,6 +1104,9 @@ export default function App() {
       setDetectedSymptoms([])
       setUrgencyLevel('low')
       setVitals(null)
+      setFollowUpQuestions([])
+      setDiagnoses([])
+      setShowDiagnosisPanel(false)
       setView('home')
     }
   }
@@ -827,6 +1121,9 @@ export default function App() {
       setSuggestedMeds([])
       setTriageInfo(null)
       setMentalHealthInfo(null)
+      setFollowUpQuestions([])
+      setDiagnoses([])
+      setShowDiagnosisPanel(false)
       setView('chat')
     } else {
       // Clear current session
@@ -834,6 +1131,9 @@ export default function App() {
       setSessionId('')
       setDetectedSymptoms([])
       setUrgencyLevel('low')
+      setFollowUpQuestions([])
+      setDiagnoses([])
+      setShowDiagnosisPanel(false)
     }
   }
 
@@ -1823,6 +2123,7 @@ export default function App() {
             </div>
             <div className="emergency-actions">
               <a href="tel:108" className="emergency-call"><PhoneIcon /> Call 108</a>
+              <button className="emergency-hospital-btn" onClick={() => { setShowSpecialistFinder(true); setShowEmergency(false); }}>🏥 Find Hospital</button>
               <button onClick={() => setShowEmergency(false)}><XIcon /></button>
             </div>
           </motion.div>
@@ -2011,16 +2312,27 @@ export default function App() {
                     {detectedSymptoms.slice(0, 5).map((s, i) => (
                       <motion.span 
                         key={i} 
-                        className="symptom-tag"
+                        className="symptom-tag clickable"
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.1 }}
+                        onClick={() => {
+                          setSelectedSymptom(s)
+                          setShowSymptomDetails(true)
+                        }}
+                        title="Click for more info"
                       >
                         {s}
                       </motion.span>
                     ))}
                     {detectedSymptoms.length > 5 && (
-                      <span className="symptom-tag more">+{detectedSymptoms.length - 5} more</span>
+                      <span 
+                        className="symptom-tag more clickable"
+                        onClick={() => setShowDiagnosisPanel(true)}
+                        title="View all symptoms"
+                      >
+                        +{detectedSymptoms.length - 5} more
+                      </span>
                     )}
                   </div>
                 </div>
@@ -2086,6 +2398,82 @@ export default function App() {
               </div>
             </motion.div>
           )}
+          
+          {/* NEW: Diagnosis Panel - Shows 5 possible conditions with confidence */}
+          {showDiagnosisPanel && diagnoses.length > 0 && (
+            <motion.div 
+              className="diagnosis-panel"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="diagnosis-header">
+                <div className="diagnosis-header-left">
+                  <ClipboardIcon />
+                  <span>Possible Conditions</span>
+                </div>
+                <button 
+                  className="diagnosis-close-btn"
+                  onClick={() => setShowDiagnosisPanel(false)}
+                  title="Close diagnosis panel"
+                >
+                  <XIcon />
+                </button>
+              </div>
+              <div className="diagnosis-list">
+                {diagnoses.slice(0, 5).map((d, i) => (
+                  <motion.div 
+                    key={i} 
+                    className={`diagnosis-card ${d.urgency || 'self_care'} clickable`}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => fetchConditionDetails(d)}
+                    title="Click for more details"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="diagnosis-main">
+                      <div className="diagnosis-rank">#{i + 1}</div>
+                      <div className="diagnosis-info">
+                        <div className="diagnosis-name">{d.condition} <span className="click-hint">ℹ️</span></div>
+                        <div className="diagnosis-desc">{d.description}</div>
+                      </div>
+                    </div>
+                    <div className="diagnosis-confidence-wrapper">
+                      <div className="diagnosis-confidence-bar">
+                        <motion.div 
+                          className="diagnosis-confidence-fill"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.round(d.confidence * 100)}%` }}
+                          transition={{ delay: i * 0.1, duration: 0.5 }}
+                          style={{ 
+                            background: d.confidence > 0.7 ? 'linear-gradient(90deg, #00d4aa, #00c49a)' 
+                                      : d.confidence > 0.5 ? 'linear-gradient(90deg, #fbbf24, #f59e0b)'
+                                      : 'linear-gradient(90deg, #60a5fa, #3b82f6)'
+                          }}
+                        />
+                      </div>
+                      <span className="diagnosis-confidence-text">{Math.round(d.confidence * 100)}%</span>
+                    </div>
+                    {d.specialist && (
+                      <div className="diagnosis-specialist">
+                        <StethoscopeIconComponent /> {d.specialist}
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+              <div className="diagnosis-disclaimer">
+                ⚕️ These are AI-generated possibilities. Consult a doctor for proper diagnosis.
+              </div>
+              <button 
+                className="diagnosis-find-doctor-btn"
+                onClick={() => { setShowSpecialistFinder(true); setShowDiagnosisPanel(false); }}
+              >
+                🏥 Find a Specialist Near You
+              </button>
+            </motion.div>
+          )}
+          
           <div className="chat-wrapper">
             <div className="chat-webgl-bg">
               <WebGLBackground contained />
@@ -2162,6 +2550,41 @@ export default function App() {
             <div ref={chatEndRef}></div>
             </div>
           </div>
+          
+          {/* NEW: Follow-up Questions - AI asks before diagnosing */}
+          {followUpQuestions.length > 0 && !loading && (
+            <motion.div 
+              className="follow-up-questions"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="follow-up-header">
+                <MessageIcon />
+                <span>Help me understand better:</span>
+              </div>
+              <div className="follow-up-buttons">
+                {followUpQuestions.map((q, i) => (
+                  <motion.button
+                    key={i}
+                    className="follow-up-btn"
+                    onClick={() => {
+                      setInput(q)
+                      setFollowUpQuestions([])
+                    }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="follow-up-icon">❓</span>
+                    <span className="follow-up-text">{q}</span>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+          
           <div className="quick-actions">
             {quickActions.map((a, i) => <button key={i} className="quick-action-btn" onClick={() => sendMsg(a.msg)} disabled={loading}>{a.label}</button>)}
           </div>
@@ -2169,6 +2592,8 @@ export default function App() {
             <div className="input-wrapper">
               <button className={`action-btn voice-btn ${isListening ? 'active' : ''}`} onClick={toggleListening}><MicIcon /></button>
               <button className="action-btn camera-btn" onClick={() => imageInputRef.current?.click()} title="Upload image for analysis"><CameraIcon /></button>
+              <button className="action-btn body-btn" onClick={() => setShowBodySelector(true)} title="Show where it hurts"><BodyIcon size={18} color="#fff" /></button>
+              <button className="action-btn doctor-btn" onClick={() => setShowSpecialistFinder(true)} title="Find nearby doctors & online consultation"><StethoscopeIcon size={18} /></button>
               <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
               <div className="input-field-container">
                 <input type="text" className="input-field" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMsg()} placeholder={isListening ? 'Listening...' : 'Type message...'} disabled={loading} />
@@ -2210,6 +2635,255 @@ export default function App() {
       >
         <p>For informational purposes only. Consult a healthcare professional.</p>
       </motion.footer>
+
+      {/* Body Selector Modal */}
+      <AnimatePresence>
+        {showBodySelector && (
+          <BodySelector
+            onSelectSymptoms={handleBodyPartsSelected}
+            onClose={() => setShowBodySelector(false)}
+            language={detectedLang || language}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Specialist Finder Modal - Find nearby doctors & online consultation */}
+      <AnimatePresence>
+        {showSpecialistFinder && (
+          <SpecialistFinder
+            symptoms={detectedSymptoms}
+            urgency={urgencyLevel}
+            diagnoses={diagnoses}
+            language={detectedLang || language}
+            onClose={() => setShowSpecialistFinder(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Condition Details Modal - Shows detailed info when clicking a diagnosis */}
+      <AnimatePresence>
+        {showConditionDetails && selectedCondition && (
+          <motion.div 
+            className="condition-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowConditionDetails(false)}
+          >
+            <motion.div 
+              className="condition-modal"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="condition-modal-header">
+                <div className="condition-modal-title">
+                  <h3>{selectedCondition.condition}</h3>
+                </div>
+                <button 
+                  className="condition-modal-close"
+                  onClick={() => setShowConditionDetails(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="condition-modal-confidence">
+                <div className="confidence-label">Likelihood</div>
+                <div className="confidence-bar-container">
+                  <div 
+                    className="confidence-bar-fill"
+                    style={{ 
+                      width: `${Math.round(selectedCondition.confidence * 100)}%`,
+                      background: selectedCondition.confidence > 0.7 ? '#00d4aa' 
+                                : selectedCondition.confidence > 0.5 ? '#fbbf24' : '#60a5fa'
+                    }}
+                  />
+                </div>
+                <span className="confidence-percent">{Math.round(selectedCondition.confidence * 100)}%</span>
+              </div>
+
+              {selectedCondition.urgency && (
+                <div className={`condition-urgency urgency-${selectedCondition.urgency}`}>
+                  {selectedCondition.urgency === 'emergency' && 'Emergency - Seek immediate care'}
+                  {selectedCondition.urgency === 'urgent' && 'Urgent - See doctor within 24 hours'}
+                  {selectedCondition.urgency === 'doctor_soon' && 'See a doctor within a few days'}
+                  {selectedCondition.urgency === 'routine' && 'Routine - Schedule when convenient'}
+                  {selectedCondition.urgency === 'self_care' && 'Self-care - Can manage at home'}
+                </div>
+              )}
+
+              <div className="condition-modal-content">
+                {conditionDetailsLoading ? (
+                  <div className="condition-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Loading details...</p>
+                  </div>
+                ) : selectedCondition.detailedInfo ? (
+                  <div className="condition-details-formatted">
+                    {(() => {
+                      // Parse the AI response into sections
+                      const text = selectedCondition.detailedInfo
+                      const sections = []
+                      
+                      // Extract sections with **header:** pattern
+                      const whatMatch = text.match(/\*\*What it is[:\*]*\*?\*?\s*(.+?)(?=\*\*|$)/is)
+                      const causesMatch = text.match(/\*\*Common causes[:\*]*\*?\*?\s*(.+?)(?=\*\*|$)/is)
+                      const remediesMatch = text.match(/\*\*Home remedies[:\*]*\*?\*?\s*(.+?)(?=\*\*|$)/is)
+                      const doctorMatch = text.match(/\*\*When to see[:\*]*\*?\*?\s*(.+?)(?=\*\*|$)/is)
+                      
+                      return (
+                        <div className="condition-info-grid">
+                          {whatMatch && (
+                            <div className="info-section">
+                              <div className="info-header">What is it?</div>
+                              <p>{whatMatch[1].replace(/\*\*/g, '').trim()}</p>
+                            </div>
+                          )}
+                          {causesMatch && (
+                            <div className="info-section">
+                              <div className="info-header">Common Causes</div>
+                              <p>{causesMatch[1].replace(/\*\*/g, '').trim()}</p>
+                            </div>
+                          )}
+                          {remediesMatch && (
+                            <div className="info-section">
+                              <div className="info-header">Home Care</div>
+                              <p>{remediesMatch[1].replace(/\*\*/g, '').trim()}</p>
+                            </div>
+                          )}
+                          {doctorMatch && (
+                            <div className="info-section warning">
+                              <div className="info-header">When to See a Doctor</div>
+                              <p>{doctorMatch[1].replace(/\*\*/g, '').trim()}</p>
+                            </div>
+                          )}
+                          {!whatMatch && !causesMatch && !remediesMatch && !doctorMatch && (
+                            <div className="info-section">
+                              <p>{text.replace(/\*\*/g, '').trim()}</p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                ) : (
+                  <div className="condition-basic-info">
+                    <p>{selectedCondition.description}</p>
+                    {selectedCondition.specialist && (
+                      <div className="condition-specialist">
+                        <strong>Recommended Specialist:</strong> {selectedCondition.specialist}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="condition-modal-actions">
+                <button 
+                  className="condition-action-btn primary"
+                  onClick={() => { 
+                    setShowSpecialistFinder(true); 
+                    setShowConditionDetails(false); 
+                  }}
+                >
+                  Find {selectedCondition.specialist || 'Doctor'}
+                </button>
+                <button 
+                  className="condition-action-btn secondary"
+                  onClick={() => setShowConditionDetails(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="condition-disclaimer">
+                This is AI-generated information for educational purposes. Always consult a healthcare professional for proper diagnosis and treatment.
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Symptom Details Modal */}
+      <AnimatePresence>
+        {showSymptomDetails && selectedSymptom && (
+          <motion.div 
+            className="symptom-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowSymptomDetails(false)}
+          >
+            <motion.div 
+              className="symptom-modal"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="symptom-modal-header">
+                <h3>{getSymptomInfo(selectedSymptom, language).name}</h3>
+                <button 
+                  className="symptom-modal-close"
+                  onClick={() => setShowSymptomDetails(false)}
+                >
+                  <XIcon />
+                </button>
+              </div>
+              <div className="symptom-modal-content">
+                <div className="symptom-info-section">
+                  <div className="symptom-info-icon">📋</div>
+                  <div>
+                    <h4>{language === 'en' ? 'Description' : language === 'hi' ? 'विवरण' : language === 'ta' ? 'விளக்கம்' : language === 'te' ? 'వివరణ' : 'Description'}</h4>
+                    <p>{getSymptomInfo(selectedSymptom, language).description}</p>
+                  </div>
+                </div>
+                <div className="symptom-info-section">
+                  <div className="symptom-info-icon">🔍</div>
+                  <div>
+                    <h4>{language === 'en' ? 'Common Causes' : language === 'hi' ? 'सामान्य कारण' : language === 'ta' ? 'பொதுவான காரணங்கள்' : language === 'te' ? 'సాధారణ కారణాలు' : 'Causes'}</h4>
+                    <p>{getSymptomInfo(selectedSymptom, language).causes}</p>
+                  </div>
+                </div>
+                <div className="symptom-info-section">
+                  <div className="symptom-info-icon">🏠</div>
+                  <div>
+                    <h4>{language === 'en' ? 'Home Remedies' : language === 'hi' ? 'घरेलू उपचार' : language === 'ta' ? 'வீட்டு வைத்தியம்' : language === 'te' ? 'ఇంటి నివారణలు' : 'Remedies'}</h4>
+                    <p>{getSymptomInfo(selectedSymptom, language).homeRemedies}</p>
+                  </div>
+                </div>
+                <div className="symptom-info-section warning">
+                  <div className="symptom-info-icon">⚠️</div>
+                  <div>
+                    <h4>{language === 'en' ? 'When to See a Doctor' : language === 'hi' ? 'डॉक्टर को कब दिखाएं' : language === 'ta' ? 'மருத்துவரை எப்போது பார்க்க வேண்டும்' : language === 'te' ? 'వైద్యుడిని ఎప్పుడు సంప్రదించాలి' : 'See Doctor'}</h4>
+                    <p>{getSymptomInfo(selectedSymptom, language).whenToSeeDoctor}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="symptom-modal-footer">
+                <button 
+                  className="symptom-modal-btn primary"
+                  onClick={() => {
+                    setInput(`Tell me more about ${selectedSymptom}`)
+                    setShowSymptomDetails(false)
+                    setTimeout(() => sendMsg(), 100)
+                  }}
+                >
+                  {language === 'en' ? 'Ask AI for More Details' : language === 'hi' ? 'AI से और जानकारी पूछें' : 'Ask AI'}
+                </button>
+                <button 
+                  className="symptom-modal-btn secondary"
+                  onClick={() => setShowSymptomDetails(false)}
+                >
+                  {language === 'en' ? 'Close' : language === 'hi' ? 'बंद करें' : 'Close'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

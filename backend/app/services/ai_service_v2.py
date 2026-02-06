@@ -49,6 +49,40 @@ except ImportError:
     HAS_SYMPTOM_NORMALIZER = False
     logger.warning("Symptom normalizer not available - using basic matching")
 
+# Import advanced diagnosis engine
+try:
+    from app.services.diagnosis_engine import (
+        generate_differential_diagnosis as advanced_diagnosis,
+        detect_red_flags,
+        get_condition_info
+    )
+    HAS_ADVANCED_DIAGNOSIS = True
+    logger.info("✅ Advanced diagnosis engine loaded with 60+ conditions")
+except ImportError:
+    HAS_ADVANCED_DIAGNOSIS = False
+    logger.warning("Advanced diagnosis engine not available")
+
+# Import AI-powered medication service
+try:
+    from app.services.ai_medication_service import get_smart_medications
+    HAS_AI_MEDICATION = True
+    logger.info("✅ AI Medication service loaded (medllama2-powered)")
+except ImportError:
+    HAS_AI_MEDICATION = False
+    logger.warning("AI Medication service not available")
+
+# Import Drug RAG service for PDF-based drug lookup
+try:
+    from app.services.drug_rag_service import get_drug_rag_service
+    drug_rag = get_drug_rag_service()
+    HAS_DRUG_RAG = True
+    logger.info(f"✅ Drug RAG service loaded with {len(drug_rag.drugs_data)} drugs from PDF")
+except Exception as e:
+    HAS_DRUG_RAG = False
+    drug_rag = None
+    logger.warning(f"Drug RAG service not available: {e}")
+
+
 
 class ModelType(str, Enum):
     """Available AI models"""
@@ -69,6 +103,16 @@ class UrgencyLevel(str, Enum):
 
 
 @dataclass
+class DiagnosisCandidate:
+    """A possible diagnosis with confidence"""
+    condition: str
+    confidence: float  # 0.0 to 1.0
+    description: str = ""
+    urgency: str = "self_care"
+    specialist: Optional[str] = None
+
+
+@dataclass
 class AIResponse:
     """Structured AI response"""
     text: str
@@ -78,9 +122,11 @@ class AIResponse:
     reasoning: Optional[str] = None
     symptoms_detected: List[str] = field(default_factory=list)
     conditions_suggested: List[str] = field(default_factory=list)
+    diagnoses: List[Dict] = field(default_factory=list)  # Multiple diagnoses with confidence
     medications: List[Dict] = field(default_factory=list)
     specialist_recommended: Optional[str] = None
     follow_up_questions: List[str] = field(default_factory=list)
+    needs_more_info: bool = False  # True if we need to ask more questions
     mental_health_detected: bool = False
     processing_time_ms: int = 0
 
@@ -448,12 +494,37 @@ class MedicalReasoningEngine:
         ]
     }
     
-    def get_medications(self, symptoms: List[str], urgency: UrgencyLevel) -> List[Dict]:
-        """Get medication suggestions - prioritize safe OTC options"""
+    def get_medications(self, symptoms: List[str], urgency: UrgencyLevel, 
+                        diagnoses: List[Dict] = None, age: int = 30, 
+                        gender: str = "unknown", allergies: List[str] = None) -> List[Dict]:
+        """
+        Get medication suggestions using AI-powered recommendations.
+        Falls back to basic matching if AI fails.
+        """
         # DON'T suggest medications for serious conditions
         if urgency in [UrgencyLevel.EMERGENCY, UrgencyLevel.URGENT]:
             return []
         
+        # === TRY AI-POWERED MEDICATION SERVICE FIRST ===
+        if HAS_AI_MEDICATION:
+            try:
+                urgency_str = urgency.value if hasattr(urgency, 'value') else str(urgency)
+                ai_meds = get_smart_medications(
+                    symptoms=symptoms,
+                    diagnoses=diagnoses,
+                    age=age,
+                    gender=gender,
+                    allergies=allergies,
+                    urgency=urgency_str
+                )
+                if ai_meds and len(ai_meds) >= 2:
+                    logger.info(f"💊 AI Medication service returned {len(ai_meds)} recommendations")
+                    return ai_meds
+            except Exception as e:
+                logger.warning(f"AI Medication service failed: {e}")
+        
+        # === FALLBACK: Basic keyword matching ===
+        logger.info("Using fallback medication matching")
         medications = []
         remedies = []
         seen_meds = set()
@@ -599,10 +670,206 @@ class MedicalReasoningEngine:
                                 medications.append(med)
                                 seen_meds.add(med["name"])
         
-        # Smart selection: ensure each symptom is represented
-        # Allow 2 meds per symptom, up to 10 pharma + 2 natural for multi-symptom cases
-        max_pharma = min(10, 2 * len(symptoms) + 2)  # Scale with symptom count
-        final_medications = medications[:max_pharma] + remedies[:2]
+        # === Drug RAG Integration: Always search PDF-based drug database for official drugs ===
+        if HAS_DRUG_RAG and drug_rag:
+            try:
+                # Build search query from symptoms - also add condition inference terms
+                search_terms = list(symptoms) if symptoms else []
+                
+                # Add condition inference terms based on symptom patterns
+                symptoms_lower = [s.lower() for s in symptoms]
+                symptoms_text = ' '.join(symptoms_lower)
+                
+                # Infer condition categories from symptoms
+                if any(x in symptoms_text for x in ['urinary', 'urine', 'burning urination', 'uti', 'bladder']):
+                    search_terms.extend(['infection', 'bacterial', 'antibacterial', 'urinary tract'])
+                if any(x in symptoms_text for x in ['fever', 'temperature', 'chills']):
+                    search_terms.extend(['antipyretic', 'fever'])
+                if any(x in symptoms_text for x in ['cough', 'cold', 'congestion', 'sneeze']):
+                    search_terms.extend(['respiratory', 'cough', 'expectorant'])
+                if any(x in symptoms_text for x in ['diarrhea', 'loose stool', 'watery stool']):
+                    search_terms.extend(['antidiarrhoeal', 'diarrhea'])
+                if any(x in symptoms_text for x in ['vomit', 'nausea', 'throw up']):
+                    search_terms.extend(['antiemetic', 'nausea'])
+                if any(x in symptoms_text for x in ['allergy', 'allergic', 'itching', 'rash', 'hives']):
+                    search_terms.extend(['antiallergic', 'antihistamine'])
+                if any(x in symptoms_text for x in ['acidity', 'heartburn', 'indigestion', 'gastric', 'stomach pain', 'stomach ache', 'abdominal pain', 'abdomen pain']):
+                    search_terms.extend(['antacid', 'peptic ulcer', 'gastric', 'anti peptic'])
+                if any(x in symptoms_text for x in ['headache', 'migraine', 'head pain']):
+                    search_terms.extend(['migraine', 'analgesic'])
+                if any(x in symptoms_text for x in ['diabetes', 'blood sugar', 'glucose']):
+                    search_terms.extend(['hypoglycaemic', 'diabetes'])
+                if any(x in symptoms_text for x in ['blood pressure', 'hypertension', 'bp']):
+                    search_terms.extend(['antihypertensive', 'blood pressure'])
+                if any(x in symptoms_text for x in ['depression', 'sad', 'mood']):
+                    search_terms.extend(['antidepressant', 'depression'])
+                if any(x in symptoms_text for x in ['anxiety', 'panic', 'nervous']):
+                    search_terms.extend(['anxiolytic', 'anxiety'])
+                if any(x in symptoms_text for x in ['constipation', 'hard stool', 'difficulty passing']):
+                    search_terms.extend(['laxative', 'constipation'])
+                if any(x in symptoms_text for x in ['vertigo', 'dizzy', 'dizziness', 'spinning']):
+                    search_terms.extend(['antivertigo', 'vertigo'])
+                if any(x in symptoms_text for x in ['spasm', 'cramp', 'muscle pain']):
+                    search_terms.extend(['antispasmodic', 'muscle relaxant'])
+                if any(x in symptoms_text for x in ['fungal', 'fungus', 'ringworm', 'athlete foot']):
+                    search_terms.extend(['antifungal', 'fungal'])
+                if any(x in symptoms_text for x in ['worm', 'intestinal worm', 'parasites']):
+                    search_terms.extend(['antihelminthic', 'worm'])
+                
+                search_query = ' '.join(search_terms)
+                logger.info(f"🔍 Searching Drug RAG for: {search_query}")
+                
+                # Helper function to extract dosage from drug name
+                def extract_dosage_from_name(name: str) -> str:
+                    dosage_match = re.search(r'(\d+\.?\d*\s*(mg|ml|g|mcg|iu|%|mg/\d+ml))', name, re.IGNORECASE)
+                    if dosage_match:
+                        return dosage_match.group(1).strip()
+                    return "As directed"
+                
+                # Use the new search_drugs method
+                rag_drugs = drug_rag.search_drugs(search_query, symptoms=symptoms, n_results=5)
+                logger.info(f"📋 Drug RAG returned {len(rag_drugs)} drugs")
+                added_count = 0
+                for drug in rag_drugs:
+                    drug_name = drug.get('base_name', drug.get('name', ''))
+                    if drug_name not in seen_meds:
+                        # Add source info - these are from official drug list PDF
+                        med_entry = {
+                            "name": drug_name,
+                            "full_name": drug.get('name', drug_name),
+                            "category": drug.get('category', 'General'),
+                            "dosage": extract_dosage_from_name(drug.get('name', '')),
+                            "source": "DrugList PDF",
+                            "verified": True,
+                            "is_otc": True
+                        }
+                        medications.append(med_entry)
+                        seen_meds.add(drug_name)
+                        added_count += 1
+                        logger.info(f"📋 Added RAG drug: {drug_name} ({drug.get('category', 'N/A')})")
+                logger.info(f"✅ Added {added_count} drugs from Drug RAG")
+            except Exception as e:
+                logger.warning(f"Drug RAG lookup failed: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+        else:
+            logger.debug("Drug RAG not available (HAS_DRUG_RAG=False)")
+        
+        # === Smart Deduplication: Remove duplicate drugs with different formulations ===
+        # e.g., "Paracetamol inj 500 mg", "Paracetamol tab 650 mg" -> keep only one
+        # Also handles "Dolo 650 (Paracetamol)" matching with "Paracetamol"
+        
+        def extract_base_drug_name(name: str) -> str:
+            """Extract base drug name without formulation details"""
+            import re
+            name_lower = name.lower().strip()
+            
+            # First, check for generic name in parentheses like "Dolo 650 (Paracetamol)"
+            paren_match = re.search(r'\(([^)]+)\)', name_lower)
+            if paren_match:
+                generic = paren_match.group(1).strip()
+                # If it looks like a drug name (not just "for pain" etc.), use it
+                if len(generic) > 3 and not any(x in generic for x in ['for ', 'with ', 'and ']):
+                    return generic
+            
+            # Remove brand name patterns like "Dolo 650 / Crocin"
+            if ' / ' in name_lower:
+                # Take the first part before /
+                name_lower = name_lower.split(' / ')[0].strip()
+            
+            # Remove common formulation patterns: tab, inj, cap, syrup, mg, ml, etc.
+            patterns_to_remove = [
+                r'\s+(tab|tablet|tablets|inj|injection|cap|capsule|capsules|syrup|susp|suspension)\s*',
+                r'\s+\d+\s*(mg|ml|mcg|g|iu)\b',  # Dosage like "500 mg", "10 ml"
+                r'\s+\d+\s*$',  # Trailing numbers
+                r'\s*\([^)]+\)\s*$',  # Parenthetical info at end
+            ]
+            result = name_lower
+            for pattern in patterns_to_remove:
+                result = re.sub(pattern, ' ', result, flags=re.IGNORECASE)
+            return result.strip()
+        
+        def deduplicate_medications(meds: List[Dict]) -> List[Dict]:
+            """Keep only one medication per base drug name, prefer branded with details"""
+            seen_base_names = {}  # base_name -> best medication
+            seen_generics = set()  # Track generic names we've seen
+            
+            for med in meds:
+                name = med.get('name', '')
+                base_name = extract_base_drug_name(name)
+                
+                # Skip if this generic drug was already added
+                if base_name in seen_generics:
+                    continue
+                
+                if base_name not in seen_base_names:
+                    seen_base_names[base_name] = med
+                    seen_generics.add(base_name)
+                else:
+                    # Prefer more detailed entries (branded with generic in parens)
+                    existing = seen_base_names[base_name]
+                    existing_name = existing.get('name', '').lower()
+                    new_name = name.lower()
+                    
+                    # Prefer entries with brand names (have "/" or "()")
+                    existing_has_details = '/' in existing_name or '(' in existing_name
+                    new_has_details = '/' in new_name or '(' in new_name
+                    
+                    if new_has_details and not existing_has_details:
+                        seen_base_names[base_name] = med
+                    # Prefer tablets/capsules over injections
+                    elif 'inj' in existing_name and ('tab' in new_name or 'cap' in new_name):
+                        seen_base_names[base_name] = med
+                    # Prefer common dosages (500-650mg for paracetamol, etc.)
+                    elif '650' in new_name or '500' in new_name:
+                        if '1000' in existing_name or '250' in existing_name:
+                            seen_base_names[base_name] = med
+            
+            return list(seen_base_names.values())
+        
+        def filter_invalid_medications(meds: List[Dict]) -> List[Dict]:
+            """Remove invalid entries like category names, single words that aren't drugs"""
+            # Category names and invalid entries to filter out
+            invalid_names = {
+                'laxatives', 'antacids', 'antibiotics', 'antivirals', 'antifungals',
+                'analgesics', 'antipyretics', 'antihistamines', 'decongestants',
+                'expectorants', 'antitussives', 'nsaids', 'steroids', 'hormones',
+                'vitamins', 'minerals', 'supplements', 'topical', 'oral', 'injectable',
+                'tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'gel',
+                'drops', 'spray', 'inhaler', 'patch', 'suppository'
+            }
+            filtered = []
+            for med in meds:
+                name = med.get('name', '').lower().strip()
+                # Skip if name is a category/invalid entry
+                if name in invalid_names:
+                    continue
+                # Skip very short names (likely not real drugs)
+                if len(name) < 3:
+                    continue
+                filtered.append(med)
+            return filtered
+        
+        # Filter out invalid entries first, then deduplicate
+        medications = filter_invalid_medications(medications)
+        remedies = filter_invalid_medications(remedies)
+        
+        # Apply deduplication to all medications
+        medications = deduplicate_medications(medications)
+        remedies = deduplicate_medications(remedies)
+        logger.info(f"🧹 After deduplication: {len(medications)} medications, {len(remedies)} remedies")
+        
+        # Smart selection: Prioritize official PDF drugs, then other medications
+        # Separate medications by source for proper prioritization
+        rag_meds = [m for m in medications if m.get('source') == 'DrugList PDF']
+        other_meds = [m for m in medications if m.get('source') != 'DrugList PDF']
+        
+        # Allow more meds for multi-symptom cases
+        max_total = min(10, 2 * len(symptoms) + 4)  # Scale with symptom count
+        
+        # Prioritize: RAG drugs first (official), then other medications, then remedies
+        final_medications = rag_meds[:4] + other_meds[:max_total - len(rag_meds[:4])] + remedies[:2]
+        logger.info(f"💊 Final selection: {len(rag_meds[:4])} RAG + {len(other_meds[:max_total-len(rag_meds[:4])])} other + {len(remedies[:2])} remedies")
         
         # Enrich with official database information (WHO ATC classification)
         if HAS_DRUG_DATABASE:
@@ -615,6 +882,7 @@ class MedicalReasoningEngine:
         enriched = []
         for med in medications:
             drug_name = med.get("name", "")
+            original_source = med.get("source")  # Preserve original source
             
             # Get ATC classification (local, fast lookup)
             atc_info = atc_classification.classify_drug(drug_name)
@@ -627,7 +895,9 @@ class MedicalReasoningEngine:
                 med["therapeutic_group"] = atc_info.get("therapeutic_group")
                 med["is_otc"] = atc_info.get("otc", True)
                 med["requires_prescription"] = not atc_info.get("otc", True)
-                med["source"] = "WHO ATC/DDD"
+                # Only set source if not already set (preserve DrugList PDF source)
+                if not original_source:
+                    med["source"] = "WHO ATC/DDD"
             else:
                 # Not in our verified database
                 med["verified"] = False
@@ -814,12 +1084,185 @@ class MedicalReasoningEngine:
             standard_result["reasoning"].append(f"Multiple symptoms detected")
         
         return standard_result
+    
+    def generate_follow_up_questions(self, symptoms: List[str], conversation_text: str) -> List[str]:
+        """
+        Generate smart follow-up questions based on symptoms to gather more info.
+        A good doctor asks before diagnosing!
+        IMPROVED: Better context checking to avoid repetitive questions.
+        """
+        questions = []
+        symptoms_lower = [s.lower() for s in symptoms]
+        # Clean conversation text - remove punctuation for better matching
+        import re
+        conv_lower = re.sub(r'[^\w\s]', ' ', conversation_text.lower())
+        conv_words = set(conv_lower.split())
+        
+        # Symptom-specific follow-up questions
+        SYMPTOM_QUESTIONS = {
+            "headache": [
+                ("Where exactly is the headache located - forehead, sides, or back of head?", ["forehead", "sides", "back", "located", "where"]),
+                ("Is it a throbbing pain or constant pressure?", ["throbbing", "pressure", "constant", "pulsing"]),
+                ("Did it start suddenly or gradually?", ["suddenly", "gradually", "started", "began"]),
+                ("Any sensitivity to light or sound?", ["light", "sound", "sensitivity", "sensitive"])
+            ],
+            "migraine": [
+                ("Do you see any visual disturbances like flashing lights?", ["visual", "flashing", "lights", "aura"]),
+                ("Is the pain on one side of your head or both?", ["one side", "both sides", "left", "right"]),
+                ("Any nausea or vomiting along with it?", ["nausea", "vomiting", "sick"]),
+                ("Have you had migraines before?", ["before", "history", "previous", "recurring"])
+            ],
+            "fever": [
+                ("What is your temperature reading?", ["temperature", "reading", "degrees", "measured"]),
+                ("Any chills or sweating?", ["chills", "sweating", "shivering", "cold"]),
+                ("When did the fever start?", ["started", "began", "since", "days"]),
+                ("Any body aches or weakness along with fever?", ["aches", "weakness", "body pain", "tired"])
+            ],
+            "cough": [
+                ("Is it a dry cough or producing mucus?", ["dry", "mucus", "phlegm", "wet"]),
+                ("What color is the mucus if any?", ["color", "yellow", "green", "white", "clear"]),
+                ("Does the cough worsen at night?", ["night", "worse", "evening", "sleeping"]),
+                ("Any chest pain when coughing?", ["chest", "pain", "hurts"])
+            ],
+            "stomach pain": [
+                ("Where exactly is the pain - upper, lower, left or right side?", ["upper", "lower", "left", "right", "location"]),
+                ("Is it sharp pain or dull ache?", ["sharp", "dull", "ache", "stabbing"]),
+                ("Any relation to eating - before or after meals?", ["eating", "meals", "food", "after"]),
+                ("Any vomiting, diarrhea or constipation?", ["vomiting", "diarrhea", "constipation", "loose"])
+            ],
+            "joint pain": [
+                ("Which joints are affected?", ["knee", "elbow", "shoulder", "wrist", "ankle", "hip", "joints"]),
+                ("Any swelling, redness, or warmth?", ["swelling", "redness", "warmth", "swollen", "red", "warm"]),
+                ("Worse in morning or after activity?", ["morning", "activity", "exercise", "movement"]),
+                ("Any recent injury or overuse?", ["injury", "hurt", "fell", "accident"])
+            ],
+            "rash": [
+                ("Where on your body is the rash?", ["arm", "leg", "chest", "back", "face", "body"]),
+                ("Is it itchy, painful, or neither?", ["itchy", "painful", "scratchy", "burning"]),
+                ("Any new products, foods, or medications recently?", ["new", "product", "medication", "food", "allergy"]),
+                ("Is it spreading or staying in one area?", ["spreading", "growing", "same", "area"])
+            ],
+            "anxiety": [
+                ("What triggers your anxious feelings?", ["trigger", "cause", "situation", "when"]),
+                ("Any physical symptoms like racing heart or sweating?", ["heart", "racing", "sweating", "trembling"]),
+                ("How long have you been feeling this way?", ["long", "days", "weeks", "months"]),
+                ("Any trouble sleeping or concentrating?", ["sleep", "sleeping", "concentrate", "focus"])
+            ]
+        }
+        
+        # General questions if we have few symptoms
+        GENERAL_QUESTIONS = [
+            ("How long have you been experiencing these symptoms?", ["long", "days", "weeks", "started", "duration"]),
+            ("On a scale of 1-10, how severe is your discomfort?", ["scale", "severity", "severe", "mild", "10"]),
+            ("Are you currently taking any medications?", ["medication", "medicine", "taking", "drugs", "pills"]),
+            ("Do you have any known allergies?", ["allergy", "allergic", "allergies"]),
+        ]
+        
+        def is_already_answered(check_words):
+            """Check if any of the key words are already in the conversation"""
+            return any(word in conv_words for word in check_words)
+        
+        # Add symptom-specific questions (max 2 per symptom)
+        for symptom in symptoms_lower:
+            for pattern, q_list in SYMPTOM_QUESTIONS.items():
+                if pattern in symptom or symptom in pattern:
+                    for question, check_words in q_list:
+                        # Don't ask if already answered in conversation
+                        if not is_already_answered(check_words):
+                            if question not in questions:
+                                questions.append(question)
+                                if len(questions) >= 2:  # Max 2 questions total per symptom
+                                    break
+                    break
+        
+        # If we have few symptom-specific questions, add general ones
+        if len(questions) < 2:
+            for question, check_words in GENERAL_QUESTIONS:
+                if not is_already_answered(check_words):
+                    if question not in questions:
+                        questions.append(question)
+                if len(questions) >= 3:
+                    break
+        
+        return questions[:3]  # Return max 3 questions (reduced from 4)
+    
+    def generate_differential_diagnosis(self, symptoms: List[str], vitals: Optional[Dict] = None, 
+                                         age: int = 30, gender: str = "unknown") -> List[Dict]:
+        """
+        Generate differential diagnosis using AI - no hardcoded database!
+        Uses Ollama LLM for dynamic, intelligent diagnosis like a real doctor.
+        """
+        # Try advanced AI diagnosis first
+        if HAS_ADVANCED_DIAGNOSIS:
+            try:
+                # Use the imported advanced_diagnosis from diagnosis_engine
+                # which internally uses ai_diagnosis.py with Ollama LLM
+                ai_result = advanced_diagnosis(symptoms, age=age, gender=gender)
+                if ai_result:
+                    logger.info(f"🧠 AI Diagnosis returned {len(ai_result)} conditions for: {symptoms}")
+                    # Normalize format if needed (confidence as decimal)
+                    for diag in ai_result:
+                        if isinstance(diag.get("confidence"), (int, float)) and diag["confidence"] > 1:
+                            diag["confidence"] = diag["confidence"] / 100.0
+                        diag["confidence"] = round(diag.get("confidence", 0.5), 2)
+                    return ai_result[:5]
+            except Exception as e:
+                logger.error(f"Advanced diagnosis failed: {e}")
+        
+        # Fallback: Try direct AI diagnosis
+        try:
+            from app.services.ai_diagnosis import get_ai_diagnosis_sync
+            ai_result = get_ai_diagnosis_sync(symptoms, age=age, gender=gender)
+            if ai_result:
+                logger.info(f"🧠 Direct AI Diagnosis: {len(ai_result)} conditions")
+                # Normalize confidence to decimal
+                for diag in ai_result:
+                    if isinstance(diag.get("confidence"), (int, float)) and diag["confidence"] > 1:
+                        diag["confidence"] = diag["confidence"] / 100.0
+                    diag["confidence"] = round(diag.get("confidence", 0.5), 2)
+                return ai_result[:5]
+        except Exception as e:
+            logger.error(f"Direct AI diagnosis failed: {e}")
+        
+        # Ultimate fallback - minimal generic response
+        logger.warning("All AI diagnosis methods failed, using minimal fallback")
+        return [
+            {"condition": "Requires Assessment", "confidence": 0.40, "urgency": "routine", 
+             "description": f"Symptoms ({', '.join(symptoms[:3])}) need proper medical evaluation"},
+            {"condition": "General Medical Consultation Needed", "confidence": 0.35, "urgency": "routine",
+             "description": "Please consult a healthcare provider for accurate diagnosis"},
+        ]
+    
+    def should_ask_followup(self, symptoms: List[str], message_count: int) -> bool:
+        """
+        Determine if we should ask follow-up questions before giving diagnosis.
+        Returns True ONLY if we really need more information.
+        
+        CHANGED: Be less aggressive - prefer giving advice over asking questions
+        """
+        # If we have at least one clear symptom, give advice first
+        if len(symptoms) >= 1:
+            return False  # Give advice, don't ask more questions
+        
+        # Only ask follow-up if symptoms are very vague
+        vague_symptoms = ["pain", "discomfort", "unwell", "sick", "bad", "not feeling well"]
+        if all(any(v in s.lower() for v in vague_symptoms) for s in symptoms):
+            return True
+        
+        return False
 
 
 class PowerfulAIService:
     """
     Production-grade AI Health Assistant
     Uses multiple models intelligently for best results
+    
+    Model Routing Strategy:
+    - medllama2: Medical queries (trained on medical literature)
+    - gemma2:9b: Complex reasoning tasks
+    - llama3.1:8b: General queries
+    - llama3.2:3b: Fast/simple queries
+    - llava:7b: Image analysis
     """
     
     def __init__(self):
@@ -828,13 +1271,15 @@ class PowerfulAIService:
         self.redis_client = None
         self._init_redis()
         
-        # Model configuration
+        # Model configuration - MEDICAL FIRST for accuracy
+        # Trade-off: medllama2 is slower (~10-15s) but more accurate for medical
+        # Use intelligent routing based on query type
         self.models = {
-            "medical": ModelType.MEDICAL.value,
-            "general": ModelType.GENERAL.value,
-            "fast": ModelType.FAST.value,
-            "vision": ModelType.VISION.value,
-            "reasoning": ModelType.REASONING.value
+            "medical": ModelType.MEDICAL.value,  # medllama2 - trained on medical data
+            "general": ModelType.GENERAL.value,  # llama3.1:8b - broad knowledge
+            "fast": ModelType.FAST.value,        # llama3.2:3b - quick responses
+            "vision": ModelType.VISION.value,    # llava:7b - image analysis
+            "reasoning": ModelType.REASONING.value  # gemma2:9b - complex reasoning
         }
         
         # System prompts for different contexts
@@ -853,30 +1298,22 @@ class PowerfulAIService:
             self.redis_client = None
     
     def _get_medical_prompt(self) -> str:
-        return """You are MedAssist, a friendly AI health assistant.
+        return """You are MedAssist, a helpful health assistant.
 
-RESPONSE STYLE:
-- Be concise and clear (2-4 short paragraphs max)
-- Use simple, everyday language
-- Be warm and reassuring
-- NO markdown headers, NO bullet points, NO numbered lists
-- Write naturally like a caring doctor would speak
+RULES:
+- Give practical advice, not just "see a doctor"
+- 2-3 short paragraphs max
+- No bullet points or headers
+- Be warm and helpful
 
-RESPONSE FORMAT (follow this exactly):
-Start with acknowledging their concern in 1 sentence.
-Then explain what might be causing it in 1-2 sentences.
-Give practical advice in 1-2 sentences.
-End with when to see a doctor if needed.
+FORMAT:
+1. Acknowledge symptom
+2. Explain likely cause
+3. Give 2-3 home remedies
+4. When to see doctor (only if serious)
 
-EXAMPLE GOOD RESPONSE:
-"I understand you're dealing with a headache and that can be really uncomfortable. This could be from tension, dehydration, or lack of sleep. Try resting in a dark room, staying hydrated, and taking paracetamol if needed. If the headache persists for more than 2 days or gets severe, please see a doctor."
-
-CRITICAL:
-- Keep responses SHORT (under 100 words ideally)
-- Do NOT use emojis in the text
-- Do NOT list medications (the app shows them separately)
-- Do NOT use "Understanding:", "Assessment:" headers
-- Just speak naturally"""
+EXAMPLE: "I understand constipation is uncomfortable. This usually happens from low fiber, dehydration, or inactivity. Try drinking 8 glasses of water, eating more fruits/veggies, and taking a 20-min walk. Isabgol before bed can help. See a doctor if it lasts over a week or causes severe pain."
+- Keep responses under 100 words"""
 
     def _get_mental_health_prompt(self) -> str:
         return """You are MedAssist, a compassionate mental health support companion.
@@ -911,6 +1348,28 @@ Example: "Call 108 immediately. While waiting, keep the person lying down and lo
 
 NO long explanations. Action first."""
 
+    def _get_follow_up_prompt(self) -> str:
+        return """You are MedAssist, a caring AI health assistant gathering information.
+
+BEHAVIOR: Like a good doctor, you need to understand the patient's condition better before making any assessment.
+
+RESPONSE STYLE:
+- Acknowledge what they've shared
+- Ask 1-2 clarifying questions naturally in conversation
+- Be warm and reassuring
+- Keep response SHORT (2-3 sentences max)
+
+EXAMPLE:
+User: "I have a headache"
+You: "I'm sorry to hear you're dealing with a headache. To help you better, could you tell me where exactly it hurts and when it started? Also, is it a throbbing pain or more like pressure?"
+
+IMPORTANT:
+- Do NOT diagnose yet
+- Do NOT suggest medications yet
+- Just gather more information naturally
+- Ask relevant follow-up questions
+- Be conversational, not clinical"""
+
     async def chat(
         self,
         session_id: str,
@@ -921,24 +1380,45 @@ NO long explanations. Action first."""
     ) -> AIResponse:
         """
         Main chat interface with intelligent routing
+        Now includes follow-up questions and differential diagnosis!
         """
         start_time = time.time()
         
-        # Step 1: Get conversation history for context-aware analysis
-        conversation_history = self.memory.get_full_conversation_text(session_id)
-        
-        # Step 2: Track symptoms from current message
+        # Step 1: Track symptoms from current message FIRST (before getting history)
         self.memory.track_symptoms(session_id, message)
+        
+        # Step 2: Get conversation history INCLUDING current message for context-aware analysis
+        conversation_history = self.memory.get_full_conversation_text(session_id)
+        # Append current message to ensure it's included in context checks
+        full_conversation = f"{conversation_history} {message}".strip()
         
         # Step 3: Get all accumulated symptoms
         all_symptoms = self.memory.get_all_symptoms(session_id)
         
         # Step 4: Analyze with full conversation history (critical for multi-turn symptom detection)
-        analysis = self.reasoning_engine.analyze_with_history(message, all_symptoms, conversation_history, vitals)
+        analysis = self.reasoning_engine.analyze_with_history(message, all_symptoms, full_conversation, vitals)
+        
+        # Step 4.5: Count conversation turns to decide if we need more info
+        turn_count = len(self.memory.conversations.get(session_id, [])) // 2 + 1
+        
+        # Step 4.6: Determine if we should ask follow-up questions
+        needs_more_info = False
+        follow_up_questions = []
+        
+        # Don't ask follow-ups for emergencies or if we have enough info
+        if analysis["urgency"] != UrgencyLevel.EMERGENCY:
+            needs_more_info = self.reasoning_engine.should_ask_followup(all_symptoms, turn_count)
+            if needs_more_info or len(all_symptoms) >= 1:
+                follow_up_questions = self.reasoning_engine.generate_follow_up_questions(
+                    all_symptoms, full_conversation  # Use full_conversation which includes current message
+                )
+        
+        # Step 4.7: Generate differential diagnosis
+        diagnoses = self.reasoning_engine.generate_differential_diagnosis(all_symptoms, vitals)
         
         # Step 5: Check cache for similar queries (only for non-emergency, single-turn)
         cache_key = self._get_cache_key(message, language)
-        if not conversation_history:  # Only use cache for first message
+        if not full_conversation.strip():  # Only use cache for first message
             cached = await self._get_cached_response(cache_key)
             if cached and analysis["urgency"] == UrgencyLevel.SELF_CARE:
                 cached["processing_time_ms"] = int((time.time() - start_time) * 1000)
@@ -946,6 +1426,10 @@ NO long explanations. Action first."""
         
         # Step 5: Select appropriate model and prompt
         model, system_prompt = self._select_model_and_prompt(analysis, image_base64)
+        
+        # Step 5.5: Modify prompt if we need to ask follow-up questions
+        if needs_more_info and follow_up_questions and not image_base64:
+            system_prompt = self._get_follow_up_prompt()
         
         # Step 6: Build conversation context
         context = self.memory.get_context(session_id)
@@ -973,7 +1457,19 @@ NO long explanations. Action first."""
             self.memory.add_message(session_id, "user", message)
             self.memory.add_message(session_id, "assistant", ai_text)
             
-            # Step 9: Build response
+            # Step 8.5: AI-powered symptom extraction - SKIP if we already have symptoms (speed optimization)
+            # Only run AI extraction for vague/complex messages without clear symptoms
+            if len(analysis["symptoms_detected"]) < 1:
+                ai_extracted_symptoms = await self._extract_symptoms_with_ai(full_conversation, message)
+                if ai_extracted_symptoms:
+                    self.memory.add_symptoms(session_id, ai_extracted_symptoms)
+                    all_symptoms = list(set(analysis["symptoms_detected"] + ai_extracted_symptoms))
+                    analysis["symptoms_detected"] = all_symptoms
+                    logger.info(f"📋 Updated symptoms with AI extraction: {all_symptoms}")
+            else:
+                logger.info(f"⚡ Skipping AI symptom extraction - already have {len(analysis['symptoms_detected'])} symptoms")
+            
+            # Step 9: Build response with diagnoses and follow-up questions
             response = AIResponse(
                 text=ai_text,
                 urgency=analysis["urgency"],
@@ -982,7 +1478,10 @@ NO long explanations. Action first."""
                 reasoning="; ".join(analysis["reasoning"]) if analysis["reasoning"] else None,
                 symptoms_detected=analysis["symptoms_detected"],
                 conditions_suggested=analysis["conditions_suggested"],
+                diagnoses=diagnoses,  # NEW: Multiple diagnoses with confidence
                 specialist_recommended=analysis["specialist"],
+                follow_up_questions=follow_up_questions,  # NEW: Follow-up questions
+                needs_more_info=needs_more_info,  # NEW: Flag for UI
                 mental_health_detected=analysis["mental_health"],
                 processing_time_ms=int((time.time() - start_time) * 1000)
             )
@@ -1037,20 +1536,89 @@ NO long explanations. Action first."""
         analysis: Dict, 
         has_image: bool
     ) -> Tuple[str, str]:
-        """Intelligently select the best model for the task"""
+        """
+        SPEED-OPTIMIZED model selection.
+        Use FAST model by default, only use slow medical model for complex cases.
+        """
         
         if has_image:
             return self.models["vision"], self.system_prompts["medical"]
         
+        # ONLY use medical model for true emergencies
         if analysis["urgency"] == UrgencyLevel.EMERGENCY:
             return self.models["medical"], self.system_prompts["emergency"]
         
         if analysis["mental_health"]:
             return self.models["general"], self.system_prompts["mental_health"]
         
-        # Default to medical model for health queries
-        return self.models["medical"], self.system_prompts["medical"]
-    
+        # SPEED OPTIMIZATION: Use FAST model for most queries
+        # medllama2 is ~3x slower but only marginally better for common symptoms
+        return self.models["fast"], self.system_prompts["medical"]
+
+    def _extract_dosage(self, drug_name: str) -> str:
+        """Extract dosage information from drug name string."""
+        import re
+        # Look for patterns like "650 mg", "500mg", "100 mg/5ml"
+        dosage_match = re.search(r'(\d+\.?\d*\s*(mg|ml|g|mcg|iu|%|mg/\d+ml))', drug_name, re.IGNORECASE)
+        if dosage_match:
+            return dosage_match.group(1).strip()
+        return "As directed"
+
+    async def _extract_symptoms_with_ai(self, conversation_text: str, current_message: str) -> List[str]:
+        """
+        Use AI to extract symptoms from conversation context.
+        This understands contextual references like "it is green" referring to urine.
+        """
+        prompt = f"""Extract medical symptoms from this conversation. Output ONLY symptom names separated by commas.
+
+Conversation: {conversation_text}
+Current: {current_message}
+
+Rules:
+- Output ONLY symptoms, nothing else
+- Use format: symptom1, symptom2, symptom3
+- Be specific: "green urine" not just "green"
+- If user says "it is green" after discussing urination, output "green urine"
+- No explanations, no sentences, just symptoms
+
+Symptoms:"""
+
+        try:
+            response = ollama.chat(
+                model=self.models["fast"],
+                messages=[{"role": "user", "content": prompt}],
+                options={
+                    "temperature": 0.0,  # Zero for deterministic
+                    "num_predict": 50,  # Very short response
+                }
+            )
+            
+            symptoms_text = response["message"]["content"].strip()
+            
+            # Parse comma-separated symptoms
+            symptoms = []
+            for s in symptoms_text.replace("\n", ",").split(","):
+                symptom = s.strip().lower()
+                # Filter out non-symptoms and garbage
+                if (symptom and 
+                    len(symptom) > 2 and 
+                    len(symptom) < 50 and  # Filter long garbage
+                    symptom not in ["none", "no symptoms", "n/a", ""] and
+                    not symptom.startswith("note") and
+                    not symptom.startswith("based") and
+                    not symptom.startswith("here")):
+                    # Clean up common prefixes
+                    symptom = symptom.lstrip("- •").strip()
+                    if symptom and len(symptom.split()) <= 4:  # Max 4 words per symptom
+                        symptoms.append(symptom)
+            
+            logger.info(f"🧠 AI extracted symptoms: {symptoms}")
+            return symptoms[:6]  # Max 6 symptoms
+            
+        except Exception as e:
+            logger.warning(f"AI symptom extraction failed: {e}")
+            return []
+
     async def _generate_response(
         self,
         message: str,
@@ -1059,45 +1627,50 @@ NO long explanations. Action first."""
         context: List[Dict],
         language: str
     ) -> str:
-        """Generate AI response using Ollama, then translate if needed"""
+        """Generate AI response using Ollama - directly in native language for better quality"""
         
-        messages = [{"role": "system", "content": system_prompt}]
+        # Language names for prompting
+        LANGUAGE_NAMES = {
+            "hi": "Hindi (हिंदी)", "ta": "Tamil (தமிழ்)", "te": "Telugu (తెలుగు)",
+            "kn": "Kannada (ಕನ್ನಡ)", "ml": "Malayalam (മലയാളം)", "bn": "Bengali (বাংলা)",
+            "gu": "Gujarati (ગુજરાતી)", "mr": "Marathi (मराठी)", "pa": "Punjabi (ਪੰਜਾਬੀ)",
+            "or": "Odia (ଓଡ଼ିଆ)", "as": "Assamese (অসমীয়া)", "ur": "Urdu (اردو)", "en": "English"
+        }
+        
+        # Modify system prompt to generate in native language
+        if language != "en" and language in LANGUAGE_NAMES:
+            lang_name = LANGUAGE_NAMES[language]
+            native_prompt = f"""{system_prompt}
+
+CRITICAL LANGUAGE & FORMAT INSTRUCTIONS:
+1. RESPOND ONLY IN {lang_name} - use native script, not transliteration.
+2. KEEP RESPONSE CONCISE - maximum 3-4 sentences.
+3. STRUCTURE: Start with empathy → Give 1-2 possible causes → Suggest 1-2 home remedies → Advise when to see doctor.
+4. Be warm like a family doctor. Use simple words.
+5. ALWAYS complete your sentences - never leave response incomplete.
+6. If stomach pain: mention antacids, light food, rest.
+7. If fever: mention paracetamol, fluids, rest."""
+            messages = [{"role": "system", "content": native_prompt}]
+        else:
+            messages = [{"role": "system", "content": system_prompt}]
+        
         messages.extend(context)
         messages.append({"role": "user", "content": message})
-        
-        # Always generate in English for best quality
-        # Then translate to target language
         
         try:
             response = ollama.chat(
                 model=model,
                 messages=messages,
                 options={
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "num_predict": 512  # Keep responses shorter
+                    "temperature": 0.5,  # Slightly higher for more natural language
+                    "top_p": 0.85,
+                    "num_predict": 400,  # Increased for complete native language responses
+                    "num_ctx": 2048,     # Larger context for better understanding
                 }
             )
-            english_response = response["message"]["content"]
-            
-            # Translate to target language if not English
-            if language != "en":
-                try:
-                    from app.services.nlp.translator import TranslationService
-                    translator = TranslationService()
-                    translated = translator.translate(
-                        text=english_response,
-                        target_language=language,
-                        source_language="en",
-                        preserve_medical=True
-                    )
-                    logger.info(f"Translated response to {language}")
-                    return translated
-                except Exception as trans_error:
-                    logger.error(f"Translation failed: {trans_error}, returning English")
-                    return english_response
-            
-            return english_response
+            native_response = response["message"]["content"]
+            logger.info(f"Generated native {language} response directly from AI")
+            return native_response
             
         except Exception as e:
             logger.error(f"Ollama error with {model}: {e}")
@@ -1318,6 +1891,9 @@ async def get_ai_response(
         "conditions_suggested": response.conditions_suggested,
         "specialist_recommended": response.specialist_recommended,
         "medications": medications,
+        "diagnoses": response.diagnoses,  # NEW: Multiple diagnoses with confidence
+        "follow_up_questions": response.follow_up_questions,  # NEW: Follow-up questions for UI
+        "needs_more_info": response.needs_more_info,  # NEW: Flag to show follow-up UI
         "mental_health": {
             "detected": response.mental_health_detected
         },

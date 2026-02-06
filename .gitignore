@@ -93,3 +93,4 @@ grafana_data/
 tmp/
 temp/
 *.tmp
+.vercel

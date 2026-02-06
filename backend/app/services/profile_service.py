@@ -312,6 +312,8 @@ class ProfileService:
             user_id=str(data.get("id", "")),
             name=data.get("name"),
             age=data.get("age"),
+            height_cm=data.get("height_cm"),
+            weight_kg=data.get("weight_kg"),
             preferred_language=data.get("preferred_language", "en"),
             total_consultations=data.get("total_consultations", 0)
         )
@@ -392,9 +394,22 @@ class ProfileService:
         Returns:
             Updated profile or None if not found
         """
+        logger.info(f"update_profile called with phone={phone_number}, updates={updates}")
+        
+        # Use PostgreSQL if available
+        if self.use_postgres:
+            result = postgres_profile_service.update_profile(phone_number, **updates)
+            if result:
+                logger.info(f"Updated profile in PostgreSQL for {phone_number}")
+                return self._dict_to_profile_from_postgres(result)
+            return None
+        
         profile = self.get_profile(phone_number)
         if not profile:
+            logger.error(f"Profile not found for {phone_number}")
             return None
+        
+        logger.info(f"Profile found: {profile.name}, height_cm before update: {profile.height_cm}")
         
         # Update allowed fields
         allowed_fields = [
@@ -405,7 +420,10 @@ class ProfileService:
         
         for field, value in updates.items():
             if field in allowed_fields and value is not None:
+                logger.info(f"Setting {field} = {value}")
                 setattr(profile, field, value)
+        
+        logger.info(f"Profile height_cm after setattr: {profile.height_cm}")
         
         # Handle gender and blood_type specially
         if 'gender' in updates and updates['gender']:
@@ -416,7 +434,7 @@ class ProfileService:
         profile.updated_at = datetime.utcnow()
         self._save_profiles()
         
-        logger.info(f"Updated profile for {phone_number}")
+        logger.info(f"Updated profile for {phone_number}, final height_cm: {profile.height_cm}")
         return profile
     
     def add_allergy(self, phone_number: str, allergen: str, 

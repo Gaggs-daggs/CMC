@@ -17,11 +17,13 @@ import logging
 import json
 
 # Try to use the new orchestrator, fallback to old service
-try:
-    from ..services.ai_orchestrator import get_ai_orchestrator, ProductionAIOrchestrator
-    ORCHESTRATOR_AVAILABLE = True
-except ImportError:
-    ORCHESTRATOR_AVAILABLE = False
+# DISABLED: Using old ai_service_v2 for stability
+# try:
+#     from ..services.ai_orchestrator import get_ai_orchestrator, ProductionAIOrchestrator
+#     ORCHESTRATOR_AVAILABLE = True
+# except ImportError:
+#     ORCHESTRATOR_AVAILABLE = False
+ORCHESTRATOR_AVAILABLE = False  # Force use of ai_service_v2
 
 # Import session helpers for database persistence
 try:
@@ -91,6 +93,24 @@ class MentalHealthInfo(BaseModel):
     resources: list = []
 
 
+class DiagnosisInfo(BaseModel):
+    """Individual diagnosis with confidence"""
+    condition: str
+    confidence: float
+    description: str = ""
+    urgency: str = "self_care"
+    specialist: Optional[str] = None
+
+
+class UserPreferences(BaseModel):
+    """User preferences based on profile for UI customization"""
+    tts_gender: str = "female"
+    tts_speed: str = "normal"
+    age_group: str = "adult"
+    has_allergies: bool = False
+    has_conditions: bool = False
+
+
 class MessageResponse(BaseModel):
     response: str
     response_translated: Optional[str] = None
@@ -101,9 +121,11 @@ class MessageResponse(BaseModel):
     model_used: str = "medllama2"
     reasoning: Optional[str] = None
     conditions_suggested: list = []
+    diagnoses: List[DiagnosisInfo] = []  # NEW: Multiple diagnoses with confidence
     specialist_recommended: Optional[str] = None
     medications: list = []
-    follow_up_questions: list = []
+    follow_up_questions: list = []  # Now populated!
+    needs_more_info: bool = False  # NEW: Flag to show we need more info
     triage: Optional[TriageInfo] = None
     safety: Optional[SafetyInfo] = None
     rag: Optional[RAGInfo] = None
@@ -111,6 +133,7 @@ class MessageResponse(BaseModel):
     processing_time_ms: int = 0
     translation_time_ms: int = 0
     components_used: List[str] = []
+    user_preferences: Optional[UserPreferences] = None  # NEW: Profile-based preferences
 
 
 # Import profile service for user context
@@ -252,6 +275,24 @@ async def send_message(request: MessageRequest):
         # Get phone number from session for profile context
         phone_number = session.get("phone_number") or session.get("user_id")
         
+        # Get user preferences from profile for personalization (TTS speed, etc.)
+        user_prefs = None
+        if phone_number and PROFILE_SERVICE_AVAILABLE:
+            try:
+                profile = profile_service.get_profile(phone_number)
+                if profile:
+                    tts_prefs = profile.get_tts_preferences()
+                    user_prefs = UserPreferences(
+                        tts_gender=tts_prefs.get("gender", "female"),
+                        tts_speed=tts_prefs.get("speed", "normal"),
+                        age_group=profile.get_age_group(),
+                        has_allergies=len(profile.allergies) > 0,
+                        has_conditions=len(profile.medical_conditions) > 0
+                    )
+                    logger.info(f"👤 User preferences: age_group={user_prefs.age_group}, tts_speed={user_prefs.tts_speed}")
+            except Exception as e:
+                logger.warning(f"Could not load user preferences: {e}")
+        
         # Use orchestrator if available (has RAG, Safety, Triage)
         if ORCHESTRATOR_AVAILABLE:
             orchestrator = get_ai_orchestrator()
@@ -312,9 +353,11 @@ async def send_message(request: MessageRequest):
                 model_used=result.model_used,
                 reasoning=None,
                 conditions_suggested=result.conditions_suggested or [],
+                diagnoses=[DiagnosisInfo(**d) for d in (result.diagnoses or [])],
                 specialist_recommended=result.specialist_recommended,
                 medications=result.medications or [],
                 follow_up_questions=result.follow_up_questions or [],
+                needs_more_info=result.needs_more_info,
                 triage=TriageInfo(
                     level=result.triage_level,
                     score=result.triage_score,
@@ -338,7 +381,8 @@ async def send_message(request: MessageRequest):
                 ) if result.mental_health_detected else None,
                 processing_time_ms=result.processing_time_ms,
                 translation_time_ms=result.translation_time_ms,
-                components_used=result.components_used or []
+                components_used=result.components_used or [],
+                user_preferences=user_prefs  # Include profile-based preferences for frontend
             )
         
         # Fallback to old service
@@ -411,12 +455,15 @@ async def send_message(request: MessageRequest):
             model_used=ai_response.get("model_used", "medllama2"),
             reasoning=ai_response.get("reasoning"),
             conditions_suggested=ai_response.get("conditions_suggested", []),
+            diagnoses=[DiagnosisInfo(**d) for d in ai_response.get("diagnoses", [])],
             specialist_recommended=ai_response.get("specialist_recommended"),
             medications=ai_response.get("medications", []),
             follow_up_questions=ai_response.get("follow_up_questions", []),
+            needs_more_info=ai_response.get("needs_more_info", False),
             triage=triage_info,
             mental_health=mental_health_info,
-            processing_time_ms=ai_response.get("processing_time_ms", 0)
+            processing_time_ms=ai_response.get("processing_time_ms", 0),
+            user_preferences=user_prefs  # Include profile-based preferences for frontend
         )
         
     except HTTPException:

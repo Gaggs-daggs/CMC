@@ -84,3 +84,52 @@ async def ai_health_check():
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.post("/condition-info")
+async def get_condition_info(request: dict):
+    """
+    Fast endpoint to get info about a medical condition.
+    Uses llama3.2:3b for quick responses (~2-3 seconds).
+    """
+    import ollama
+    
+    condition_name = request.get("condition", "")
+    if not condition_name:
+        return {"error": "No condition provided"}
+    
+    prompt = f"""Explain {condition_name} briefly in this exact format:
+
+**What it is:** [1-2 sentences about what this condition is]
+
+**Common causes:** [List 2-3 main causes]
+
+**Home remedies:** [2-3 home care tips, or say "Requires medical treatment" if serious]
+
+**When to see doctor:** [When to seek medical help]
+
+Keep each section to 1-2 sentences. Be helpful and clear."""
+
+    try:
+        response = ollama.chat(
+            model="llama3.2:3b",
+            messages=[{"role": "user", "content": prompt}],
+            options={
+                "temperature": 0.3,
+                "num_predict": 200,  # Enough for structured response
+                "num_ctx": 512
+            }
+        )
+        
+        return {
+            "condition": condition_name,
+            "info": response["message"]["content"],
+            "model": "llama3.2:3b"
+        }
+    except Exception as e:
+        return {
+            "condition": condition_name,
+            "info": f"Could not fetch details. {condition_name} is a medical condition that should be discussed with a healthcare provider.",
+            "error": str(e)
+        }
+

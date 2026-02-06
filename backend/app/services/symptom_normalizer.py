@@ -67,7 +67,7 @@ class SymptomNormalizer:
         
         # Urinary
         "painful urination", "frequent urination", "blood in urine",
-        "urinary urgency", "incontinence",
+        "urinary urgency", "incontinence", "abnormal urine color",
         
         # Cardiovascular
         "palpitations", "rapid heartbeat", "slow heartbeat", "chest pain",
@@ -646,6 +646,72 @@ class SymptomNormalizer:
             "gas formation", "gas problem", "excess gas",
             # Hindi
             "gas", "gas ban rahi", "pet me gas", "hawa",
+        ],
+        
+        # ==========================================
+        # URINARY SYMPTOMS VARIATIONS (60+)
+        # ==========================================
+        "frequent urination": [
+            # Typos
+            "frequant urination", "frequent urinating", "frequnt urination",
+            # Variations
+            "urinating frequently", "urinating too frequently", "urinating too much", 
+            "urinating a lot", "too frequently urinating",
+            "peeing frequently", "peeing too much", "peeing a lot",
+            "going to bathroom frequently", "bathroom urgency",
+            "need to pee often", "constant urination", "excessive urination",
+            "polyuria", "urinary frequency",
+            # Hindi
+            "bar bar peshab", "zyada peshab", "peshab ki problem",
+        ],
+        
+        "painful urination": [
+            # Typos
+            "painfull urination", "painful urinating",
+            # Variations
+            "pain when urinating", "pain while urinating", "burns when peeing",
+            "burning urination", "burning when urinating", "burning pee",
+            "hurts to pee", "hurts when peeing", "dysuria",
+            "urinary tract infection", "uti", "urine infection",
+            # Hindi
+            "peshab me jalan", "peshab me dard",
+        ],
+        
+        "blood in urine": [
+            # Variations
+            "bloody urine", "red urine", "urine is red", "blood in pee",
+            "hematuria", "blood while urinating", "bleeding when urinating",
+            "pink urine", "urine has blood", "dark red urine",
+            # Contextual - color descriptions that may indicate blood
+            "it is red", "its red", "red color", "reddish urine",
+            # Hindi
+            "peshab me khoon", "lal peshab",
+        ],
+        
+        "abnormal urine color": [
+            # Green urine variations
+            "green urine", "urine is green", "it is green", "its green",
+            "greenish urine", "green pee", "sometime it is green",
+            "sometimes green", "green color urine", "bright green urine",
+            # Dark urine
+            "dark urine", "dark yellow urine", "brown urine", "tea colored urine",
+            "cola colored urine", "orange urine",
+            # Cloudy urine
+            "cloudy urine", "murky urine", "milky urine", "foamy urine",
+            # General
+            "urine color changed", "strange urine color", "unusual urine color",
+            "discolored urine",
+            # Hindi
+            "peshab ka rang", "hara peshab", "kala peshab",
+        ],
+        
+        "urinary urgency": [
+            # Variations
+            "urgent need to pee", "sudden urge to urinate", "can't hold urine",
+            "difficulty holding urine", "rushing to bathroom",
+            "need to go right now", "bladder urgency",
+            # Hindi
+            "peshab rok nahi paa raha",
         ],
     }
     

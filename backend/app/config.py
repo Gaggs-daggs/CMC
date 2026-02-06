@@ -77,9 +77,16 @@ class Settings(BaseSettings):
     # Medical Knowledge
     KNOWLEDGE_GRAPH_PATH: str = str(BASE_DIR / "data" / "medical_knowledge" / "knowledge_graph.json")
     
+    # WhatsApp Business API
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = None
+    WHATSAPP_VERIFY_TOKEN: str = "cmc_health_verify_2024"
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields in .env
 
 
 # Global settings instance

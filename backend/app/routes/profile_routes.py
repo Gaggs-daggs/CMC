@@ -96,8 +96,21 @@ async def create_profile(request: ProfileCreateRequest):
         
         # Update with additional fields if provided
         if is_new:
+            # Update body metrics and blood type
+            update_fields = {}
             if request.blood_type:
-                profile_service.update_profile(request.phone_number, blood_type=request.blood_type)
+                update_fields['blood_type'] = request.blood_type
+            if request.height_cm is not None:
+                update_fields['height_cm'] = request.height_cm
+            if request.weight_kg is not None:
+                update_fields['weight_kg'] = request.weight_kg
+            
+            logger.info(f"Profile create - height_cm: {request.height_cm}, weight_kg: {request.weight_kg}")
+            logger.info(f"Update fields: {update_fields}")
+            
+            if update_fields:
+                updated = profile_service.update_profile(request.phone_number, **update_fields)
+                logger.info(f"Updated profile result: height={updated.height_cm}, weight={updated.weight_kg}")
             
             # Add allergies
             if request.allergies:
