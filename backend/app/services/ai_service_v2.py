@@ -11,18 +11,30 @@ Multi-model AI service with:
 - Structured JSON responses for frontend
 """
 
-import ollama
 import asyncio
+import base64
 import json
 import logging
 import hashlib
 import re
+import time
+import os
+import httpx
 from typing import Dict, Any, Optional, List, AsyncGenerator, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
 import redis.asyncio as redis
 from functools import wraps
+
+# Import translation service for native language support
+try:
+    from app.services.nlp.translator import translation_service, TranslationService
+    TRANSLATION_AVAILABLE = True
+    logger_init = logging.getLogger(__name__)
+    logger_init.info("✅ Translation service imported for ai_service_v2")
+except ImportError:
+    TRANSLATION_AVAILABLE = False
 import time
 
 logger = logging.getLogger(__name__)
@@ -167,15 +179,15 @@ class ConversationMemory:
         return self.symptom_history.get(session_id, [])
     
     def get_conversation_text(self, session_id: str) -> str:
-        """Get full conversation as text for analysis"""
+        """Get full conversation as text for analysis (both user AND assistant messages)"""
         if session_id not in self.conversations:
             return ""
         
         texts = []
         for msg in self.conversations[session_id]:
-            if msg["role"] == "user":
-                texts.append(msg["content"])
-        return " ".join(texts)
+            prefix = "Patient" if msg["role"] == "user" else "Doctor"
+            texts.append(f"{prefix}: {msg['content']}")
+        return "\n".join(texts)
     
     # Alias for consistency
     def get_full_conversation_text(self, session_id: str) -> str:
@@ -183,14 +195,65 @@ class ConversationMemory:
         return self.get_conversation_text(session_id)
     
     def track_symptoms(self, session_id: str, message: str):
-        """Extract and track symptoms from a message using comprehensive normalizer"""
+        """Extract and track symptoms from a message using comprehensive normalizer + phrase mapping"""
         
-        # Use comprehensive symptom normalizer if available
+        message_lower = message.lower()
+        found_symptoms = []
+        
+        # Priority 1: Natural language phrase mapping (catches conversational descriptions)
+        PHRASE_TO_SYMPTOM = {
+            "difficulty in sleeping": "insomnia", "difficulty sleeping": "insomnia",
+            "can't sleep": "insomnia", "cant sleep": "insomnia", "cannot sleep": "insomnia",
+            "trouble sleeping": "insomnia", "unable to sleep": "insomnia",
+            "not able to sleep": "insomnia", "sleepless": "insomnia",
+            "sleep problem": "insomnia", "sleep problems": "insomnia",
+            "hard to sleep": "insomnia", "poor sleep": "insomnia",
+            "not sleeping well": "insomnia", "disturbed sleep": "insomnia",
+            "waking up at night": "insomnia", "can't fall asleep": "insomnia",
+            "difficulty breathing": "breathing difficulty", "hard to breathe": "breathing difficulty",
+            "can't breathe": "breathing difficulty", "trouble breathing": "breathing difficulty",
+            "short of breath": "breathing difficulty", "shortness of breath": "breathing difficulty",
+            "stomach ache": "stomach pain", "tummy pain": "stomach pain",
+            "belly pain": "stomach pain", "abdomen pain": "abdominal pain",
+            "loose motion": "diarrhea", "loose motions": "diarrhea",
+            "loose stool": "diarrhea", "upset stomach": "nausea",
+            "throwing up": "vomiting", "feeling sick": "nausea",
+            "head hurts": "headache", "head is paining": "headache",
+            "head pain": "headache", "feeling hot": "fever",
+            "high temperature": "fever", "body is burning": "fever",
+            "body ache": "body ache", "body aches": "body ache",
+            "whole body pain": "body ache", "feeling tired": "fatigue",
+            "no energy": "fatigue", "feeling weak": "weakness",
+            "feeling dizzy": "dizziness", "feeling anxious": "anxiety",
+            "feeling nervous": "anxiety", "feeling sad": "depression",
+            "feeling down": "depression", "feeling low": "depression",
+            "feeling stressed": "stress", "can't focus": "stress",
+            "heart racing": "palpitations", "heart pounding": "palpitations",
+            "runny nose": "cold", "running nose": "cold",
+            "stuffy nose": "congestion", "scratchy throat": "sore throat",
+            "painful urination": "burning urination", "burning pee": "burning urination",
+            "skin rash": "rash", "itchy skin": "itching",
+            "losing weight": "weight loss", "gaining weight": "weight gain",
+            "hair falling": "hair loss", "losing hair": "hair loss",
+        }
+        
+        sorted_phrases = sorted(PHRASE_TO_SYMPTOM.keys(), key=len, reverse=True)
+        for phrase in sorted_phrases:
+            if phrase in message_lower:
+                mapped = PHRASE_TO_SYMPTOM[phrase]
+                if mapped not in found_symptoms:
+                    found_symptoms.append(mapped)
+        
+        # Priority 2: Use comprehensive symptom normalizer if available
         if HAS_SYMPTOM_NORMALIZER:
-            found_symptoms = normalize_symptoms(message)
-            if found_symptoms:
-                self.add_symptoms(session_id, found_symptoms)
-                logger.info(f"🔍 Normalized symptoms: {found_symptoms} -> Total: {self.get_all_symptoms(session_id)}")
+            normalized = normalize_symptoms(message)
+            for s in normalized:
+                if s not in found_symptoms:
+                    found_symptoms.append(s)
+        
+        if found_symptoms:
+            self.add_symptoms(session_id, found_symptoms)
+            logger.info(f"🔍 Tracked symptoms (phrase+normalizer): {found_symptoms} -> Total: {self.get_all_symptoms(session_id)}")
             return
         
         # Fallback to basic matching if normalizer not available
@@ -253,14 +316,10 @@ class ConversationMemory:
             "bodyache": "body ache",
         }
         
-        message_lower = message.lower()
-        
         # Normalize typos first
         for typo, correct in typo_map.items():
             if typo in message_lower:
                 message_lower = message_lower.replace(typo, correct)
-        
-        found_symptoms = []
         
         # Check for symptoms - longer phrases first to avoid partial matches
         sorted_keywords = sorted(symptom_keywords, key=len, reverse=True)
@@ -276,39 +335,68 @@ class ConversationMemory:
             logger.info(f"🔍 Tracked symptoms: {found_symptoms} -> Total: {self.get_all_symptoms(session_id)}")
     
     def get_context(self, session_id: str) -> List[Dict]:
-        """Get conversation context for AI"""
+        """Get conversation context for AI — includes summary, symptoms, and recent messages"""
         messages = []
         
-        # Add summary if exists
+        # Add summary if exists (from older messages that were trimmed)
         if session_id in self.summaries:
             messages.append({
                 "role": "system",
                 "content": f"Previous conversation summary: {self.summaries[session_id]}"
             })
         
-        # Add symptom context if exists
+        # Add symptom context with turn count for the AI to gauge progress
         symptoms = self.get_all_symptoms(session_id)
-        if symptoms:
+        turn_count = len(self.conversations.get(session_id, [])) // 2
+        
+        if symptoms or turn_count > 0:
+            context_parts = []
+            if symptoms:
+                context_parts.append(f"Symptoms reported so far: {', '.join(symptoms)}.")
+            context_parts.append(f"This is conversation turn #{turn_count + 1}.")
+            if turn_count >= 2:
+                context_parts.append("You have enough context — provide specific advice, don't keep asking questions.")
+            elif turn_count == 1:
+                context_parts.append("Patient just answered your question — acknowledge their answer and either ask one more clarifier or give advice.")
             messages.append({
                 "role": "system", 
-                "content": f"Patient has mentioned these symptoms so far: {', '.join(symptoms)}. Consider all symptoms together for diagnosis."
+                "content": " ".join(context_parts)
             })
         
-        # Add recent messages
+        # Add recent messages (both user AND assistant) so the AI sees what it already said
         if session_id in self.conversations:
-            for msg in self.conversations[session_id][-10:]:  # Last 10 messages
+            recent = self.conversations[session_id][-10:]  # Last 10 messages
+            for msg in recent:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         
         return messages
     
     def _summarize_old_messages(self, session_id: str):
-        """Summarize old messages to save context"""
+        """Summarize old messages to save context while preserving key medical details"""
         old_messages = self.conversations[session_id][:-10]
         if old_messages:
-            summary_text = " | ".join([
-                f"{m['role']}: {m['content'][:100]}" for m in old_messages[-5:]
-            ])
-            self.summaries[session_id] = summary_text
+            # Extract key medical facts from old messages
+            symptoms_mentioned = []
+            patient_answers = []
+            advice_given = []
+            
+            for m in old_messages:
+                content = m['content'][:200]
+                if m['role'] == 'user':
+                    patient_answers.append(content)
+                else:
+                    advice_given.append(content[:150])
+            
+            # Build a structured summary
+            summary_parts = []
+            if self.symptom_history.get(session_id):
+                summary_parts.append(f"Symptoms discussed: {', '.join(self.symptom_history[session_id])}")
+            if patient_answers:
+                summary_parts.append(f"Patient shared: {' | '.join(patient_answers[-3:])}")
+            if advice_given:
+                summary_parts.append(f"Advice given: {' | '.join(advice_given[-2:])}")
+            
+            self.summaries[session_id] = " ".join(summary_parts)
             self.conversations[session_id] = self.conversations[session_id][-10:]
     
     def clear(self, session_id: str):
@@ -505,26 +593,12 @@ class MedicalReasoningEngine:
         if urgency in [UrgencyLevel.EMERGENCY, UrgencyLevel.URGENT]:
             return []
         
-        # === TRY AI-POWERED MEDICATION SERVICE FIRST ===
-        if HAS_AI_MEDICATION:
-            try:
-                urgency_str = urgency.value if hasattr(urgency, 'value') else str(urgency)
-                ai_meds = get_smart_medications(
-                    symptoms=symptoms,
-                    diagnoses=diagnoses,
-                    age=age,
-                    gender=gender,
-                    allergies=allergies,
-                    urgency=urgency_str
-                )
-                if ai_meds and len(ai_meds) >= 2:
-                    logger.info(f"💊 AI Medication service returned {len(ai_meds)} recommendations")
-                    return ai_meds
-            except Exception as e:
-                logger.warning(f"AI Medication service failed: {e}")
+        # === SKIP AI MEDICATION - Use database lookup only (instant vs 15s LLM call) ===
+        # The database has comprehensive OTC medication mappings that work well
+        # AI medication service adds 8-15s latency for marginal improvement
         
-        # === FALLBACK: Basic keyword matching ===
-        logger.info("Using fallback medication matching")
+        # === Database keyword matching (instant) ===
+        logger.info("Using fast database medication matching")
         medications = []
         remedies = []
         seen_meds = set()
@@ -950,10 +1024,100 @@ class MedicalReasoningEngine:
                 result["conditions_suggested"].append(patterns["condition"])
                 result["reasoning"].append(f"Urgent condition: {patterns['condition']}")
         
-        # Detect symptoms - use word boundary to avoid partial matches
+        # ============================================================
+        # ENHANCED SYMPTOM DETECTION - Natural language phrase mapping
+        # Maps conversational descriptions to clinical symptom terms
+        # ============================================================
+        PHRASE_TO_SYMPTOM = {
+            # Sleep-related
+            "difficulty in sleeping": "insomnia", "difficulty sleeping": "insomnia",
+            "can't sleep": "insomnia", "cant sleep": "insomnia", "cannot sleep": "insomnia",
+            "trouble sleeping": "insomnia", "unable to sleep": "insomnia",
+            "not able to sleep": "insomnia", "sleepless": "insomnia",
+            "sleep problem": "insomnia", "sleep problems": "insomnia",
+            "hard to sleep": "insomnia", "poor sleep": "insomnia",
+            "no sleep": "insomnia", "lack of sleep": "insomnia",
+            "disturbed sleep": "insomnia", "broken sleep": "insomnia",
+            "waking up at night": "insomnia", "can't fall asleep": "insomnia",
+            "not sleeping well": "insomnia", "tossing and turning": "insomnia",
+            # Breathing-related
+            "difficulty breathing": "breathing difficulty", "hard to breathe": "breathing difficulty",
+            "can't breathe": "breathing difficulty", "trouble breathing": "breathing difficulty",
+            "short of breath": "breathing difficulty", "shortness of breath": "breathing difficulty",
+            "breathless": "breathing difficulty", "breathlessness": "breathing difficulty",
+            "gasping": "breathing difficulty",
+            # Stomach/digestion
+            "stomach ache": "stomach pain", "tummy pain": "stomach pain",
+            "belly pain": "stomach pain", "abdomen pain": "abdominal pain",
+            "can't eat": "loss of appetite", "no appetite": "loss of appetite",
+            "not hungry": "loss of appetite", "don't feel like eating": "loss of appetite",
+            "throwing up": "vomiting", "feeling sick": "nausea",
+            "feel like vomiting": "nausea", "want to vomit": "nausea",
+            "loose motion": "diarrhea", "loose motions": "diarrhea",
+            "loose stool": "diarrhea", "watery stool": "diarrhea",
+            "running stomach": "diarrhea", "upset stomach": "nausea",
+            "burning sensation in stomach": "acidity", "acid reflux": "acidity",
+            # Head-related
+            "head hurts": "headache", "head is paining": "headache",
+            "head pain": "headache", "my head hurts": "headache",
+            "pounding headache": "headache", "splitting headache": "headache",
+            "throbbing head": "headache",
+            # Fever-related
+            "feeling hot": "fever", "high temperature": "fever",
+            "body is burning": "fever", "feverish": "fever",
+            # Body pain
+            "body ache": "body ache", "body aches": "body ache",
+            "whole body pain": "body ache", "everything hurts": "body ache",
+            "body is paining": "body ache",
+            # Mental health
+            "feeling sad": "depression", "feeling low": "depression",
+            "feeling down": "depression", "no motivation": "depression",
+            "feeling hopeless": "depression", "feeling worthless": "depression",
+            "feeling anxious": "anxiety", "feeling nervous": "anxiety",
+            "feeling worried": "anxiety", "racing thoughts": "anxiety",
+            "panic attack": "anxiety", "feeling stressed": "stress",
+            "can't focus": "stress", "can't concentrate": "stress",
+            # General
+            "feeling tired": "fatigue", "no energy": "fatigue",
+            "feeling weak": "weakness", "feeling dizzy": "dizziness",
+            "spinning sensation": "vertigo", "room is spinning": "vertigo",
+            "seeing spots": "dizziness", "blurry vision": "blurred vision",
+            "ringing in ears": "tinnitus", "ear ringing": "tinnitus",
+            "runny nose": "cold", "running nose": "cold",
+            "stuffy nose": "congestion", "blocked nose": "congestion",
+            "scratchy throat": "sore throat", "throat pain": "sore throat",
+            "painful urination": "burning urination", "hurts to pee": "burning urination",
+            "burning pee": "burning urination", "blood in urine": "blood in urine",
+            "heart racing": "palpitations", "heart pounding": "palpitations",
+            "heart beating fast": "palpitations", "skipped heartbeat": "palpitations",
+            "skin rash": "rash", "itchy skin": "itching",
+            "swollen": "swelling", "puffy": "swelling",
+            "losing weight": "weight loss", "gaining weight": "weight gain",
+            "hair falling": "hair loss", "losing hair": "hair loss",
+        }
+        
+        # Step 1: Match natural language phrases FIRST (longer phrases before shorter)
+        sorted_phrases = sorted(PHRASE_TO_SYMPTOM.keys(), key=len, reverse=True)
+        matched_from_phrases = set()
+        for phrase in sorted_phrases:
+            if phrase in message_lower:
+                mapped = PHRASE_TO_SYMPTOM[phrase]
+                if mapped not in result["symptoms_detected"]:
+                    result["symptoms_detected"].append(mapped)
+                    matched_from_phrases.add(mapped)
+        
+        # Step 2: Use symptom normalizer if available
+        if HAS_SYMPTOM_NORMALIZER:
+            normalized = normalize_symptoms(message)
+            for s in normalized:
+                if s not in result["symptoms_detected"]:
+                    result["symptoms_detected"].append(s)
+        
+        # Step 3: Standard keyword matching (only for symptoms not already found)
         import re
         for symptom in self.SYMPTOM_PATTERNS["symptoms"]:
-            # Use word boundary to match whole words/phrases
+            if symptom in result["symptoms_detected"]:
+                continue
             pattern = r'\b' + re.escape(symptom) + r'\b'
             if re.search(pattern, message_lower):
                 result["symptoms_detected"].append(symptom)
@@ -1066,6 +1230,59 @@ class MedicalReasoningEngine:
             result["reasoning"].append("MENTAL HEALTH CRISIS detected")
             return result
         
+        # Check for dangerous disease names mentioned directly (safety net for AI)
+        # These are diseases so dangerous that mentioning them should auto-flag urgency
+        # IMPORTANT: Only check CURRENT message, not full conversation history
+        # Otherwise "ebola" from a previous turn would keep triggering emergency forever
+        current_lower = current_message.lower()
+        DANGEROUS_DISEASES = {
+            "emergency": [
+                "ebola", "rabies", "anthrax", "plague", "cholera", "meningitis",
+                "sepsis", "septicemia", "brain hemorrhage", "cerebral hemorrhage",
+                "pulmonary embolism", "aortic dissection", "cardiac arrest",
+                "anaphylaxis", "anaphylactic", "tetanus", "botulism",
+            ],
+            "urgent": [
+                "malaria", "dengue", "typhoid", "tuberculosis", "tb",
+                "pneumonia", "appendicitis", "kidney stone", "gallstone",
+                "dvt", "deep vein thrombosis", "cellulitis", "encephalitis",
+                "hepatitis", "pancreatitis", "diabetic ketoacidosis", "dka",
+                "meningococcal", "leptospirosis", "hantavirus",
+            ],
+            "doctor_soon": [
+                "diabetes", "hypertension", "asthma", "copd", "cancer",
+                "tumor", "lump", "thyroid", "anaemia", "anemia",
+                "kidney disease", "liver disease", "heart disease",
+            ]
+        }
+        
+        for disease in DANGEROUS_DISEASES["emergency"]:
+            if disease in current_lower:
+                result["urgency"] = UrgencyLevel.EMERGENCY
+                result["confidence"] = 0.90
+                result["conditions_suggested"].append(disease.title())
+                result["emergency_response"] = f"🚨 {disease.title()} is a life-threatening condition. SEEK IMMEDIATE MEDICAL ATTENTION — Call 108!"
+                result["reasoning"].append(f"DANGEROUS DISEASE detected: {disease}")
+                return result
+        
+        for disease in DANGEROUS_DISEASES["urgent"]:
+            if disease in current_lower:
+                result["urgency"] = UrgencyLevel.URGENT
+                result["confidence"] = 0.85
+                result["conditions_suggested"].append(disease.title())
+                result["reasoning"].append(f"Serious disease mentioned: {disease}")
+                # Don't return — let standard analysis add more detail
+                break
+        
+        if result["urgency"] == UrgencyLevel.SELF_CARE:
+            for disease in DANGEROUS_DISEASES["doctor_soon"]:
+                if disease in current_lower:
+                    result["urgency"] = UrgencyLevel.SOON
+                    result["confidence"] = 0.75
+                    result["conditions_suggested"].append(disease.title())
+                    result["reasoning"].append(f"Medical condition mentioned: {disease}")
+                    break
+        
         # Now do standard analysis on current message
         standard_result = self.analyze(current_message, vitals)
         
@@ -1077,6 +1294,22 @@ class MedicalReasoningEngine:
                 clean_symptoms.append(symptom)
         
         standard_result["symptoms_detected"] = clean_symptoms[:6]  # Max 6 symptoms
+        
+        # IMPORTANT: Keep the HIGHER urgency between disease-name check and keyword analysis
+        # This ensures "I have ebola" stays as EMERGENCY even if keyword analysis says SELF_CARE
+        URGENCY_ORDER = {
+            UrgencyLevel.SELF_CARE: 0, UrgencyLevel.ROUTINE: 1,
+            UrgencyLevel.SOON: 2, UrgencyLevel.URGENT: 3, UrgencyLevel.EMERGENCY: 4
+        }
+        if URGENCY_ORDER.get(result["urgency"], 0) > URGENCY_ORDER.get(standard_result["urgency"], 0):
+            standard_result["urgency"] = result["urgency"]
+            standard_result["confidence"] = max(standard_result["confidence"], result["confidence"])
+            standard_result["conditions_suggested"] = list(set(
+                standard_result["conditions_suggested"] + result["conditions_suggested"]
+            ))
+            standard_result["reasoning"] = result["reasoning"] + standard_result["reasoning"]
+            if result.get("emergency_response"):
+                standard_result["emergency_response"] = result["emergency_response"]
         
         # Upgrade urgency if many symptoms accumulated
         if len(clean_symptoms) >= 4 and standard_result["urgency"] == UrgencyLevel.SELF_CARE:
@@ -1187,17 +1420,21 @@ class MedicalReasoningEngine:
         return questions[:3]  # Return max 3 questions (reduced from 4)
     
     def generate_differential_diagnosis(self, symptoms: List[str], vitals: Optional[Dict] = None, 
-                                         age: int = 30, gender: str = "unknown") -> List[Dict]:
+                                         age: int = 30, gender: str = "unknown",
+                                         raw_message: str = "") -> List[Dict]:
         """
         Generate differential diagnosis using AI - no hardcoded database!
         Uses Ollama LLM for dynamic, intelligent diagnosis like a real doctor.
+        
+        raw_message: The user's original English message, used when symptom list is empty
+        so the AI can still diagnose disease names like "ebola", "malaria", etc.
         """
         # Try advanced AI diagnosis first
         if HAS_ADVANCED_DIAGNOSIS:
             try:
                 # Use the imported advanced_diagnosis from diagnosis_engine
                 # which internally uses ai_diagnosis.py with Ollama LLM
-                ai_result = advanced_diagnosis(symptoms, age=age, gender=gender)
+                ai_result = advanced_diagnosis(symptoms, age=age, gender=gender, raw_message=raw_message)
                 if ai_result:
                     logger.info(f"🧠 AI Diagnosis returned {len(ai_result)} conditions for: {symptoms}")
                     # Normalize format if needed (confidence as decimal)
@@ -1209,10 +1446,10 @@ class MedicalReasoningEngine:
             except Exception as e:
                 logger.error(f"Advanced diagnosis failed: {e}")
         
-        # Fallback: Try direct AI diagnosis
+        # Fallback: Try direct AI diagnosis (passes raw_message for disease name handling)
         try:
             from app.services.ai_diagnosis import get_ai_diagnosis_sync
-            ai_result = get_ai_diagnosis_sync(symptoms, age=age, gender=gender)
+            ai_result = get_ai_diagnosis_sync(symptoms, age=age, gender=gender, raw_message=raw_message)
             if ai_result:
                 logger.info(f"🧠 Direct AI Diagnosis: {len(ai_result)} conditions")
                 # Normalize confidence to decimal
@@ -1236,15 +1473,27 @@ class MedicalReasoningEngine:
     def should_ask_followup(self, symptoms: List[str], message_count: int) -> bool:
         """
         Determine if we should ask follow-up questions before giving diagnosis.
-        Returns True ONLY if we really need more information.
+        Balance: Ask 1-2 rounds of clarification, then give advice.
         
-        CHANGED: Be less aggressive - prefer giving advice over asking questions
+        Strategy:
+        - Turn 1 with 1 symptom: Ask follow-up (like a real doctor)
+        - Turn 2+: Give advice (patient already answered, don't keep asking)
+        - 3+ symptoms: Enough info, give advice
+        - Very vague input: Always ask
         """
-        # If we have at least one clear symptom, give advice first
-        if len(symptoms) >= 1:
-            return False  # Give advice, don't ask more questions
+        # After 2+ exchanges, always give advice (don't interrogate the patient)
+        if message_count >= 2:
+            return False
         
-        # Only ask follow-up if symptoms are very vague
+        # If we have 3+ symptoms, we have enough for assessment
+        if len(symptoms) >= 3:
+            return False
+        
+        # First turn with only 1 symptom — ask for more details
+        if message_count <= 1 and len(symptoms) == 1:
+            return True
+        
+        # Very vague descriptions — always ask
         vague_symptoms = ["pain", "discomfort", "unwell", "sick", "bad", "not feeling well"]
         if all(any(v in s.lower() for v in vague_symptoms) for s in symptoms):
             return True
@@ -1298,22 +1547,23 @@ class PowerfulAIService:
             self.redis_client = None
     
     def _get_medical_prompt(self) -> str:
-        return """You are MedAssist, a helpful health assistant.
+        return """You are MedAssist, a friendly and thorough health assistant. Be brief but contextually aware.
 
-RULES:
-- Give practical advice, not just "see a doctor"
-- 2-3 short paragraphs max
-- No bullet points or headers
-- Be warm and helpful
+Rules:
+- Write MAXIMUM 3-4 sentences total. Never more.
+- No bullet points, no headers, no bold, no markdown.
+- Do NOT mention these rules, word counts, or formatting in your reply.
+- ALWAYS read the conversation history carefully before responding.
+- NEVER repeat information you already gave or ask questions the patient already answered.
+- If the patient answers a follow-up question, acknowledge their answer and build on it.
+- Reference specific details the patient mentioned earlier (e.g., "Since you mentioned the headache started 3 days ago...").
 
-FORMAT:
-1. Acknowledge symptom
-2. Explain likely cause
-3. Give 2-3 home remedies
-4. When to see doctor (only if serious)
+Conversation flow:
+1. First message: Acknowledge symptom briefly, ask 1-2 clarifying questions (duration, severity, location).
+2. Follow-up messages: Build on what patient shared. If enough info, give assessment + 2 home remedies + when to see doctor.
+3. Later messages: Refine advice based on new info. Never restart from scratch.
 
-EXAMPLE: "I understand constipation is uncomfortable. This usually happens from low fiber, dehydration, or inactivity. Try drinking 8 glasses of water, eating more fruits/veggies, and taking a 20-min walk. Isabgol before bed can help. See a doctor if it lasts over a week or causes severe pain."
-- Keep responses under 100 words"""
+If multiple symptoms, address them together as one possible condition. Be warm but concise."""
 
     def _get_mental_health_prompt(self) -> str:
         return """You are MedAssist, a compassionate mental health support companion.
@@ -1349,26 +1599,31 @@ Example: "Call 108 immediately. While waiting, keep the person lying down and lo
 NO long explanations. Action first."""
 
     def _get_follow_up_prompt(self) -> str:
-        return """You are MedAssist, a caring AI health assistant gathering information.
+        return """You are MedAssist, a caring AI health assistant gathering information like a good doctor.
 
-BEHAVIOR: Like a good doctor, you need to understand the patient's condition better before making any assessment.
+BEHAVIOR:
+- You are having a natural conversation. READ the conversation history carefully.
+- NEVER ask a question the patient already answered.
+- NEVER repeat yourself or re-introduce yourself.
+- Reference what the patient already told you.
 
 RESPONSE STYLE:
-- Acknowledge what they've shared
-- Ask 1-2 clarifying questions naturally in conversation
-- Be warm and reassuring
+- Acknowledge what they shared (reference their specific words)
+- Ask 1-2 NEW clarifying questions naturally embedded in your response
 - Keep response SHORT (2-3 sentences max)
+- Sound like a caring human, not a form
 
-EXAMPLE:
-User: "I have a headache"
-You: "I'm sorry to hear you're dealing with a headache. To help you better, could you tell me where exactly it hurts and when it started? Also, is it a throbbing pain or more like pressure?"
+GOOD EXAMPLE (turn 2, patient said "headache since morning"):
+"A headache since this morning — that must be uncomfortable. Is it more of a throbbing feeling or steady pressure, and have you been able to eat and drink normally today?"
+
+BAD EXAMPLE (repeating/ignoring context):
+"I'm sorry to hear you have a headache. Can you tell me more about it?"
 
 IMPORTANT:
-- Do NOT diagnose yet
+- Do NOT diagnose yet on first turn
 - Do NOT suggest medications yet
-- Just gather more information naturally
-- Ask relevant follow-up questions
-- Be conversational, not clinical"""
+- Ask questions that help narrow down the cause
+- Maximum 2 questions per response"""
 
     async def chat(
         self,
@@ -1384,19 +1639,45 @@ IMPORTANT:
         """
         start_time = time.time()
         
+        # Step 0: Translate user message to English if non-English language
+        # This ensures symptom detection, diagnosis, and analysis all work correctly
+        english_message = message
+        if language != "en" and TRANSLATION_AVAILABLE:
+            try:
+                translated = translation_service.translate_to_english(message, source_language=language)
+                if translated and translated != message:
+                    english_message = translated
+                    logger.info(f"🌐 Input translated {language}->en: '{message[:60]}' -> '{english_message[:60]}'")
+            except Exception as e:
+                logger.warning(f"Input translation failed, using original: {e}")
+        
         # Step 1: Track symptoms from current message FIRST (before getting history)
-        self.memory.track_symptoms(session_id, message)
+        # Use English version so symptom keywords are detected properly
+        self.memory.track_symptoms(session_id, english_message)
         
         # Step 2: Get conversation history INCLUDING current message for context-aware analysis
         conversation_history = self.memory.get_full_conversation_text(session_id)
         # Append current message to ensure it's included in context checks
-        full_conversation = f"{conversation_history} {message}".strip()
+        full_conversation = f"{conversation_history} {english_message}".strip()
         
         # Step 3: Get all accumulated symptoms
         all_symptoms = self.memory.get_all_symptoms(session_id)
         
         # Step 4: Analyze with full conversation history (critical for multi-turn symptom detection)
-        analysis = self.reasoning_engine.analyze_with_history(message, all_symptoms, full_conversation, vitals)
+        analysis = self.reasoning_engine.analyze_with_history(english_message, all_symptoms, full_conversation, vitals)
+        
+        # Step 4.2: If no symptoms detected by keywords, try AI extraction BEFORE diagnosis
+        # This handles cases like "I have ebola" where disease names aren't in keyword lists
+        if len(analysis["symptoms_detected"]) < 1 and len(all_symptoms) < 1:
+            try:
+                ai_extracted_early = await self._extract_symptoms_with_ai(full_conversation, english_message)
+                if ai_extracted_early:
+                    self.memory.add_symptoms(session_id, ai_extracted_early)
+                    all_symptoms = list(set(all_symptoms + ai_extracted_early))
+                    analysis["symptoms_detected"] = all_symptoms
+                    logger.info(f"🧠 Early AI symptom extraction (pre-diagnosis): {ai_extracted_early}")
+            except Exception as e:
+                logger.warning(f"Early AI symptom extraction failed: {e}")
         
         # Step 4.5: Count conversation turns to decide if we need more info
         turn_count = len(self.memory.conversations.get(session_id, [])) // 2 + 1
@@ -1413,8 +1694,60 @@ IMPORTANT:
                     all_symptoms, full_conversation  # Use full_conversation which includes current message
                 )
         
-        # Step 4.7: Generate differential diagnosis
-        diagnoses = self.reasoning_engine.generate_differential_diagnosis(all_symptoms, vitals)
+        # Step 4.7: Generate differential diagnosis (run in thread to not block event loop)
+        # Pass raw_message so AI can reason about disease names even without extracted symptoms
+        diagnoses = await asyncio.to_thread(
+            self.reasoning_engine.generate_differential_diagnosis, 
+            all_symptoms, vitals, 30, "unknown", english_message
+        )
+        
+        # Step 4.8: PROPAGATE AI DIAGNOSIS URGENCY — override keyword-based urgency if AI says it's worse
+        # The AI diagnosis engine (Cerebras) is much smarter at determining urgency than keyword matching
+        URGENCY_RANK = {
+            "self_care": 0, UrgencyLevel.SELF_CARE: 0,
+            "routine": 1, UrgencyLevel.ROUTINE: 1,
+            "doctor_soon": 2, UrgencyLevel.SOON: 2,
+            "urgent": 3, UrgencyLevel.URGENT: 3,
+            "emergency": 4, UrgencyLevel.EMERGENCY: 4,
+        }
+        RANK_TO_URGENCY = {
+            0: UrgencyLevel.SELF_CARE,
+            1: UrgencyLevel.ROUTINE,
+            2: UrgencyLevel.SOON,
+            3: UrgencyLevel.URGENT,
+            4: UrgencyLevel.EMERGENCY,
+        }
+        
+        current_rank = URGENCY_RANK.get(analysis["urgency"], 0)
+        ai_max_rank = current_rank
+        ai_urgency_source = None
+        
+        for diag in diagnoses:
+            diag_urgency = diag.get("urgency", "routine")
+            diag_rank = URGENCY_RANK.get(diag_urgency, 1)
+            diag_conf = diag.get("confidence", 0)
+            
+            # Only propagate urgency from diagnoses with meaningful confidence:
+            # - Emergency upgrade: need confidence ≥ 0.50 (50%) — high bar to avoid false alarms
+            # - Urgent upgrade: need confidence ≥ 0.40 (40%)
+            # - Doctor_soon upgrade: need confidence ≥ 0.30 (30%)
+            min_confidence = {4: 0.50, 3: 0.40, 2: 0.30}.get(diag_rank, 0.30)
+            
+            if diag_rank > ai_max_rank and diag_conf >= min_confidence:
+                ai_max_rank = diag_rank
+                ai_urgency_source = diag.get("condition", "AI diagnosis")
+        
+        if ai_max_rank > current_rank:
+            old_urgency = analysis["urgency"]
+            analysis["urgency"] = RANK_TO_URGENCY[ai_max_rank]
+            analysis["reasoning"].append(
+                f"Urgency upgraded {old_urgency}→{analysis['urgency']} by AI diagnosis: {ai_urgency_source}"
+            )
+            logger.info(f"⚡ AI urgency override: {old_urgency} → {analysis['urgency']} (from: {ai_urgency_source})")
+            
+            # If AI says emergency, generate an emergency response
+            if analysis["urgency"] == UrgencyLevel.EMERGENCY and not analysis.get("emergency_response"):
+                analysis["emergency_response"] = f"🚨 SEEK IMMEDIATE MEDICAL ATTENTION — {ai_urgency_source} detected. Call emergency services (108) immediately!"
         
         # Step 5: Check cache for similar queries (only for non-emergency, single-turn)
         cache_key = self._get_cache_key(message, language)
@@ -1442,8 +1775,30 @@ IMPORTANT:
                     message, analysis, model, system_prompt, context
                 )
             elif image_base64:
-                # Use vision model for images
+                # Use Groq Vision → Cerebras pipeline for images
                 ai_text = await self._analyze_image(message, image_base64)
+                model = "groq-vision + cerebras-gpt-oss-120b"  # Reflect actual models used
+                
+                # ── Extract symptoms from the image analysis for full diagnosis pipeline ──
+                # The image analysis text contains medical findings - extract symptoms from it
+                image_symptoms = await self._extract_symptoms_with_ai(ai_text, ai_text)
+                if image_symptoms:
+                    self.memory.add_symptoms(session_id, image_symptoms)
+                    all_symptoms = list(set(all_symptoms + image_symptoms))
+                    analysis["symptoms_detected"] = all_symptoms
+                    logger.info(f"📸 Extracted symptoms from image analysis: {image_symptoms}")
+                    
+                    # Re-run differential diagnosis with image-extracted symptoms
+                    diagnoses = await asyncio.to_thread(
+                        self.reasoning_engine.generate_differential_diagnosis, all_symptoms, vitals,
+                        30, "unknown", english_message
+                    )
+                    logger.info(f"📸 Re-ran diagnosis with image symptoms: {len(diagnoses)} conditions")
+                    
+                    # Re-generate follow-up questions based on image findings
+                    follow_up_questions = self.reasoning_engine.generate_follow_up_questions(
+                        all_symptoms, ai_text
+                    )
             else:
                 # Standard AI generation
                 ai_text = await self._generate_response(
@@ -1460,7 +1815,7 @@ IMPORTANT:
             # Step 8.5: AI-powered symptom extraction - SKIP if we already have symptoms (speed optimization)
             # Only run AI extraction for vague/complex messages without clear symptoms
             if len(analysis["symptoms_detected"]) < 1:
-                ai_extracted_symptoms = await self._extract_symptoms_with_ai(full_conversation, message)
+                ai_extracted_symptoms = await self._extract_symptoms_with_ai(full_conversation, english_message)
                 if ai_extracted_symptoms:
                     self.memory.add_symptoms(session_id, ai_extracted_symptoms)
                     all_symptoms = list(set(analysis["symptoms_detected"] + ai_extracted_symptoms))
@@ -1474,7 +1829,7 @@ IMPORTANT:
                 text=ai_text,
                 urgency=analysis["urgency"],
                 confidence=analysis["confidence"],
-                model_used=model,
+                model_used="cerebras/gpt-oss-120b",
                 reasoning="; ".join(analysis["reasoning"]) if analysis["reasoning"] else None,
                 symptoms_detected=analysis["symptoms_detected"],
                 conditions_suggested=analysis["conditions_suggested"],
@@ -1498,7 +1853,7 @@ IMPORTANT:
                 text="I apologize, I'm having trouble processing your request. Please try again or consult a healthcare provider directly.",
                 urgency=analysis["urgency"],
                 confidence=0.0,
-                model_used=model,
+                model_used="cerebras/gpt-oss-120b (error)",
                 processing_time_ms=int((time.time() - start_time) * 1000)
             )
     
@@ -1537,22 +1892,23 @@ IMPORTANT:
         has_image: bool
     ) -> Tuple[str, str]:
         """
-        SPEED-OPTIMIZED model selection.
-        Use FAST model by default, only use slow medical model for complex cases.
+        Model selection prioritizing SPEED for response generation.
+        Diagnosis accuracy comes from ai_diagnosis.py (uses gemma2:9b separately).
+        Response generation uses the fast 3B model with good prompts.
         """
         
         if has_image:
             return self.models["vision"], self.system_prompts["medical"]
         
-        # ONLY use medical model for true emergencies
+        # Emergencies → medical model (worth the wait)
         if analysis["urgency"] == UrgencyLevel.EMERGENCY:
             return self.models["medical"], self.system_prompts["emergency"]
         
         if analysis["mental_health"]:
-            return self.models["general"], self.system_prompts["mental_health"]
+            return self.models["fast"], self.system_prompts["mental_health"]
         
-        # SPEED OPTIMIZATION: Use FAST model for most queries
-        # medllama2 is ~3x slower but only marginally better for common symptoms
+        # All other queries → fast model (3B) for quick response
+        # Diagnosis accuracy is handled by ai_diagnosis.py with gemma2:9b
         return self.models["fast"], self.system_prompts["medical"]
 
     def _extract_dosage(self, drug_name: str) -> str:
@@ -1568,6 +1924,7 @@ IMPORTANT:
         """
         Use AI to extract symptoms from conversation context.
         This understands contextual references like "it is green" referring to urine.
+        Uses Cerebras API (fast, no Ollama).
         """
         prompt = f"""Extract medical symptoms from this conversation. Output ONLY symptom names separated by commas.
 
@@ -1584,16 +1941,19 @@ Rules:
 Symptoms:"""
 
         try:
-            response = ollama.chat(
-                model=self.models["fast"],
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature": 0.0,  # Zero for deterministic
-                    "num_predict": 50,  # Very short response
-                }
-            )
+            cerebras_key = os.getenv("CEREBRAS_API_KEY", "")
+            if not cerebras_key:
+                logger.warning("No CEREBRAS_API_KEY for symptom extraction")
+                return []
             
-            symptoms_text = response["message"]["content"].strip()
+            result = await self._generate_response_cerebras(
+                [{"role": "user", "content": prompt}],
+                cerebras_key
+            )
+            if not result:
+                return []
+            
+            symptoms_text = result.strip()
             
             # Parse comma-separated symptoms
             symptoms = []
@@ -1627,59 +1987,92 @@ Symptoms:"""
         context: List[Dict],
         language: str
     ) -> str:
-        """Generate AI response using Ollama - directly in native language for better quality"""
+        """Generate AI response - Cerebras gpt-oss-120b only (no Ollama).
+        Always generates in English; translation handled separately via Google Translate."""
         
-        # Language names for prompting
-        LANGUAGE_NAMES = {
-            "hi": "Hindi (हिंदी)", "ta": "Tamil (தமிழ்)", "te": "Telugu (తెలుగు)",
-            "kn": "Kannada (ಕನ್ನಡ)", "ml": "Malayalam (മലയാളം)", "bn": "Bengali (বাংলা)",
-            "gu": "Gujarati (ગુજરાતી)", "mr": "Marathi (मराठी)", "pa": "Punjabi (ਪੰਜਾਬੀ)",
-            "or": "Odia (ଓଡ଼ିଆ)", "as": "Assamese (অসমীয়া)", "ur": "Urdu (اردو)", "en": "English"
+        # Step 1: If user message is in non-English, translate it to English first
+        english_message = message
+        if language != "en" and TRANSLATION_AVAILABLE:
+            try:
+                translated_input = translation_service.translate_to_english(message, source_language=language)
+                if translated_input and translated_input != message:
+                    english_message = translated_input
+                    logger.info(f"📥 Translated user input {language}->en: '{message[:50]}' -> '{english_message[:50]}'")
+            except Exception as e:
+                logger.warning(f"Input translation failed, using original: {e}")
+        
+        # Step 2: Build messages with English content
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Also translate conversation context to English if non-English
+        if language != "en" and TRANSLATION_AVAILABLE and context:
+            english_context = []
+            for msg in context:
+                if msg.get("role") == "user" and msg.get("content"):
+                    try:
+                        eng_content = translation_service.translate_to_english(msg["content"], source_language=language)
+                        english_context.append({"role": msg["role"], "content": eng_content or msg["content"]})
+                    except:
+                        english_context.append(msg)
+                else:
+                    english_context.append(msg)
+            messages.extend(english_context)
+        else:
+            messages.extend(context)
+        
+        messages.append({"role": "user", "content": english_message})
+        
+        # Step 3: Try Cerebras gpt-oss-120b
+        cerebras_key = os.getenv("CEREBRAS_API_KEY", "")
+        if cerebras_key:
+            try:
+                result = await self._generate_response_cerebras(messages, cerebras_key)
+                if result:
+                    logger.info(f"✅ Generated response via Cerebras gpt-oss-120b ({len(result)} chars)")
+                    return result
+            except Exception as e:
+                logger.warning(f"Cerebras chat failed: {e}")
+        
+        # No fallback — return a helpful error message
+        raise Exception("Cerebras API unavailable — no response generated")
+    
+    async def _generate_response_cerebras(self, messages: List[Dict], api_key: str) -> Optional[str]:
+        """Call Cerebras gpt-oss-120b for chat response generation."""
+        payload = {
+            "model": "gpt-oss-120b",
+            "messages": messages,
+            "temperature": 0.5,
+            "top_p": 0.85,
+            "max_completion_tokens": 1024,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
         }
         
-        # Modify system prompt to generate in native language
-        if language != "en" and language in LANGUAGE_NAMES:
-            lang_name = LANGUAGE_NAMES[language]
-            native_prompt = f"""{system_prompt}
-
-CRITICAL LANGUAGE & FORMAT INSTRUCTIONS:
-1. RESPOND ONLY IN {lang_name} - use native script, not transliteration.
-2. KEEP RESPONSE CONCISE - maximum 3-4 sentences.
-3. STRUCTURE: Start with empathy → Give 1-2 possible causes → Suggest 1-2 home remedies → Advise when to see doctor.
-4. Be warm like a family doctor. Use simple words.
-5. ALWAYS complete your sentences - never leave response incomplete.
-6. If stomach pain: mention antacids, light food, rest.
-7. If fever: mention paracetamol, fluids, rest."""
-            messages = [{"role": "system", "content": native_prompt}]
-        else:
-            messages = [{"role": "system", "content": system_prompt}]
-        
-        messages.extend(context)
-        messages.append({"role": "user", "content": message})
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.cerebras.ai/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+            if resp.status_code == 429:
+                logger.warning("Cerebras 429 rate-limited for chat")
+                return None
+            resp.raise_for_status()
+            data = resp.json()
         
         try:
-            response = ollama.chat(
-                model=model,
-                messages=messages,
-                options={
-                    "temperature": 0.5,  # Slightly higher for more natural language
-                    "top_p": 0.85,
-                    "num_predict": 400,  # Increased for complete native language responses
-                    "num_ctx": 2048,     # Larger context for better understanding
-                }
-            )
-            native_response = response["message"]["content"]
-            logger.info(f"Generated native {language} response directly from AI")
-            return native_response
-            
-        except Exception as e:
-            logger.error(f"Ollama error with {model}: {e}")
-            # Fallback to faster model
-            if model != self.models["fast"]:
-                return await self._generate_response(
-                    message, self.models["fast"], system_prompt, context, language
-                )
-            raise
+            msg = data["choices"][0]["message"]
+            # gpt-oss-120b may return content in "content" or "reasoning" field
+            text = msg.get("content") or msg.get("reasoning") or ""
+            if text:
+                return text
+            logger.error(f"Cerebras response has no content/reasoning: {str(msg)[:200]}")
+            return None
+        except (KeyError, IndexError):
+            logger.error(f"Unexpected Cerebras chat response: {str(data)[:200]}")
+            return None
     
     async def _generate_emergency_response(
         self,
@@ -1715,44 +2108,74 @@ Be direct and clear. This is urgent."""
         messages.append({"role": "user", "content": elaboration_prompt})
         
         try:
-            response = ollama.chat(
-                model=model,
-                messages=messages,
-                options={"temperature": 0.5, "num_predict": 512}
-            )
-            return emergency_header + response["message"]["content"]
+            cerebras_key = os.getenv("CEREBRAS_API_KEY", "")
+            if cerebras_key:
+                result = await self._generate_response_cerebras(messages, cerebras_key)
+                if result:
+                    return emergency_header + result
+            return emergency_header + "Please stay calm and follow the emergency instructions above."
         except:
             return emergency_header + "Please stay calm and follow the emergency instructions above."
     
     async def _analyze_image(self, message: str, image_base64: str) -> str:
-        """Analyze medical image using LLaVA"""
+        """Analyze medical image using Groq Vision → then pipe through Cerebras for proper medical response.
         
-        prompt = f"""You are a medical AI assistant analyzing an image.
+        Pipeline: Groq Vision (image understanding) → Cerebras gpt-oss-120b (medical diagnosis)
+        This gives us the same quality response as text-based diagnosis.
+        """
         
-User's question: {message}
-
-Analyze this image and provide:
-1. What you observe in the image
-2. Possible medical relevance
-3. Whether professional consultation is needed
-4. Any visible concerns
-
-IMPORTANT: You cannot diagnose. Only describe observations and recommend professional evaluation."""
-
+        # ── Step 1: Get raw image analysis from Groq Vision ──
+        raw_analysis = None
         try:
-            response = ollama.chat(
-                model=self.models["vision"],
-                messages=[{
-                    "role": "user",
-                    "content": prompt,
-                    "images": [image_base64]
-                }],
-                options={"temperature": 0.5}
+            from app.services.image_analysis import image_analyzer
+            result = await image_analyzer.analyze_image(
+                image_data=base64.b64decode(image_base64) if isinstance(image_base64, str) else image_base64,
+                context=message,
+                image_type="general"
             )
-            return response["message"]["content"]
+            if result.get("success"):
+                raw_analysis = result.get("raw_analysis", "")
+                logger.info(f"📸 Groq Vision analysis: {len(raw_analysis)} chars")
         except Exception as e:
-            logger.error(f"Vision model error: {e}")
+            logger.error(f"Groq Vision analysis failed: {e}")
+        
+        # Fallback if Groq failed
+        if not raw_analysis:
             return "I'm unable to analyze the image at the moment. Please describe what you see, or consult a healthcare provider directly."
+        
+        # ── Step 2: Pipe the raw analysis through Cerebras for proper medical response ──
+        # Treat the image analysis as "symptoms described" and let Cerebras respond like a doctor
+        cerebras_prompt = f"""A patient has sent a medical image for analysis. Here is the AI vision analysis of the image:
+
+--- IMAGE ANALYSIS ---
+{raw_analysis}
+--- END ANALYSIS ---
+
+Patient's message: "{message}"
+
+Based on this image analysis, respond as a caring medical AI assistant:
+1. Summarize what was found in the image in simple terms
+2. Explain the likely condition(s) and their significance
+3. Provide practical advice and home care if applicable
+4. Recommend when to see a doctor and which specialist
+5. Keep the response warm, concise (under 150 words), and helpful
+
+Do NOT use bullet points or headers. Write naturally like a doctor explaining to a patient."""
+
+        # Use the same Cerebras pipeline as normal text responses
+        system_prompt = self._get_medical_prompt()
+        context = []  # Fresh context for image analysis
+        
+        try:
+            ai_response = await self._generate_response(
+                cerebras_prompt, self.models["medical"], system_prompt, context, "en"
+            )
+            logger.info(f"✅ Image analysis piped through Cerebras: {len(ai_response)} chars")
+            return ai_response
+        except Exception as e:
+            logger.error(f"Cerebras processing of image analysis failed: {e}")
+            # Return the raw analysis as fallback
+            return raw_analysis
     
     async def stream_chat(
         self,
@@ -1760,33 +2183,21 @@ IMPORTANT: You cannot diagnose. Only describe observations and recommend profess
         message: str,
         language: str = "en"
     ) -> AsyncGenerator[str, None]:
-        """Stream response for real-time UI"""
+        """Stream response for real-time UI — uses Cerebras (non-streaming, yields full response)"""
         
         analysis = self.reasoning_engine.analyze(message)
         model, system_prompt = self._select_model_and_prompt(analysis, False)
         context = self.memory.get_context(session_id)
         
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(context)
-        messages.append({"role": "user", "content": message})
-        
         full_response = ""
         
         try:
-            stream = ollama.chat(
-                model=model,
-                messages=messages,
-                stream=True,
-                options={"temperature": 0.7}
+            full_response = await self._generate_response(
+                message, model, system_prompt, context, language
             )
+            yield full_response
             
-            for chunk in stream:
-                if chunk and "message" in chunk and "content" in chunk["message"]:
-                    text = chunk["message"]["content"]
-                    full_response += text
-                    yield text
-            
-            # Save to memory after streaming completes
+            # Save to memory after generation completes
             self.memory.add_message(session_id, "user", message)
             self.memory.add_message(session_id, "assistant", full_response)
             
@@ -1880,9 +2291,31 @@ async def get_ai_response(
     
     logger.info(f"💊 Medications for {combined_symptoms}: {[m.get('name') for m in medications]}")
     
+    # ========== TRANSLATION STEP ==========
+    # Generate English response, then translate to user's language using Google Translate
+    # This is the same approach used by the ProductionAIOrchestrator
+    response_translated = None
+    translation_time_ms = 0
+    
+    if language != "en" and TRANSLATION_AVAILABLE:
+        try:
+            trans_start = time.time()
+            translated = translation_service.translate_from_english(response.text, language)
+            if translated and translated != response.text:
+                response_translated = translated
+                translation_time_ms = int((time.time() - trans_start) * 1000)
+                logger.info(f"✅ Translated response to {language}: {len(response.text)} -> {len(translated)} chars ({translation_time_ms}ms)")
+            else:
+                logger.warning(f"⚠️ Translation returned same text or empty for {language}")
+                response_translated = response.text
+        except Exception as e:
+            logger.error(f"❌ Translation to {language} failed: {e}")
+            response_translated = response.text  # Fallback to English
+    
     # Convert to dict for frontend compatibility
     return {
         "response": response.text,
+        "response_translated": response_translated,
         "urgency_level": urgency_value,
         "confidence": response.confidence,
         "model_used": response.model_used,

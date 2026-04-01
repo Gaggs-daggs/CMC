@@ -1,10 +1,15 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './App.premium.css'
+import atlasLogo from './assets/atlas-logo.png'
+import './components/WelcomePage.css'
+import './components/PrescriptionPage.css'
 import WebGLBackground from './components/WebGLBackground'
 import SessionSidebar from './components/SessionSidebar'
 import BodySelector, { BodyIcon } from './components/BodySelector'
 import SpecialistFinder from './components/SpecialistFinder'
+import WelcomePage from './components/WelcomePage'
+import PrescriptionPage from './components/PrescriptionPage'
 import {
   MedicalCrossIcon,
   HeartPulseIcon,
@@ -30,6 +35,7 @@ import {
   HeartHandshakeIcon,
   StopCircleIcon as PremiumStopCircleIcon
 } from './components/PremiumIcons'
+import { InstallPrompt, OfflineIndicator, UpdateBanner } from './components/PWAComponents'
 
 // API URL: Uses environment variable in production, localhost in development
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
@@ -388,8 +394,59 @@ export default function App() {
   // Load saved session
   const savedSession = loadSession()
   
-  const [view, setView] = useState(savedSession?.view || 'home')
-  const [phone, setPhone] = useState(savedSession?.phone || '')
+  // ─── Auth State ───────────────────────────────────────────
+  // Auto-auth for iOS native app (detects WKWebView)
+  const isIOSApp = typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers
+  
+  const [authUser, setAuthUser] = useState(() => {
+    // iOS app: auto-authenticate
+    if (isIOSApp) {
+      return { name: 'Atlas User', email: 'atlas@ios.app', provider: 'ios_app', picture: null }
+    }
+    try {
+      const stored = localStorage.getItem('cmc_auth')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return parsed.user || null
+      }
+    } catch {}
+    return null
+  })
+  const [authToken, setAuthToken] = useState(() => {
+    if (isIOSApp) return 'ios_app_token'
+    try {
+      const stored = localStorage.getItem('cmc_auth')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return parsed.access_token || null
+      }
+    } catch {}
+    return null
+  })
+
+  // Auth callback from WelcomePage
+  const handleAuthenticated = useCallback((user, token) => {
+    setAuthUser(user)
+    setAuthToken(token)
+    // Use email as phone/userId for the existing chat system
+    if (user?.email) {
+      setPhone(user.email)
+    }
+  }, [])
+
+  // Logout
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('cmc_auth')
+    setAuthUser(null)
+    setAuthToken(null)
+    setView('home')
+    setMessages([])
+    setSessionId('')
+    setPhone('')
+  }, [])
+
+  const [view, setView] = useState(isIOSApp ? 'chat' : (savedSession?.view || 'home'))
+  const [phone, setPhone] = useState(isIOSApp ? 'atlas@ios.app' : (savedSession?.phone || ''))
   const [language, setLanguage] = useState(savedSession?.language || 'en')
   const [detectedLang, setDetectedLang] = useState(savedSession?.detectedLang || 'en')
   const [sessionId, setSessionId] = useState(savedSession?.sessionId || '')
@@ -401,7 +458,7 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [connected, setConnected] = useState(true)
-  const [showDisclaimer, setShowDisclaimer] = useState(!localStorage.getItem('cmc_disclaimer_accepted'))
+  const [showDisclaimer, setShowDisclaimer] = useState(isIOSApp ? false : !localStorage.getItem('cmc_disclaimer_accepted'))
   const [detectedSymptoms, setDetectedSymptoms] = useState(savedSession?.symptoms || [])
   const [urgencyLevel, setUrgencyLevel] = useState(savedSession?.urgency || 'low')
   const [showEmergency, setShowEmergency] = useState(false)
@@ -447,6 +504,49 @@ export default function App() {
   // NEW: Specialist finder for nearby doctors & online consultation
   const [showSpecialistFinder, setShowSpecialistFinder] = useState(false)
   
+  // NEW: Prescription Analyzer page
+  const [showPrescription, setShowPrescription] = useState(false)
+  
+  // NEW: Google Fit Vitals
+  const [showVitals, setShowVitals] = useState(false)
+  const [vitalsData, setVitalsData] = useState(null)
+  const [vitalsLoading, setVitalsLoading] = useState(false)
+  const [vitalsError, setVitalsError] = useState(null)
+
+  const fetchVitals = async () => {
+    const uid = phone.trim() || authUser?.email || 'gugan'
+    setVitalsLoading(true)
+    setVitalsError(null)
+    try {
+      const res = await fetch(`${API_BASE}/googlefit/vitals?user_id=${encodeURIComponent(uid)}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          // Not connected — get auth URL and redirect
+          const authRes = await fetch(`${API_BASE}/googlefit/auth-url?user_id=${encodeURIComponent(uid)}`)
+          const authData = await authRes.json()
+          if (authData.auth_url) {
+            window.location.href = authData.auth_url
+            return
+          }
+        }
+        throw new Error(err.detail || 'Failed to fetch vitals')
+      }
+      const data = await res.json()
+      setVitalsData(data)
+      setShowVitals(true)
+    } catch (e) {
+      setVitalsError(e.message)
+      setShowVitals(true)
+    } finally {
+      setVitalsLoading(false)
+    }
+  }
+
+  // Drag-and-drop image upload
+  const [isDragging, setIsDragging] = useState(false)
+  const dragCounterRef = useRef(0)
+  
   const chatEndRef = useRef(null)
   const recognitionRef = useRef(null)
   const imageInputRef = useRef(null)
@@ -460,6 +560,13 @@ export default function App() {
     }
   }, [view, phone, language, detectedLang, sessionId, messages, vitals, detectedSymptoms, urgencyLevel, triageInfo, mentalHealthInfo, userPrefs])
 
+  // TEMP: Auto-open body selector on iOS for testing
+  useEffect(() => {
+    if (isIOSApp && view === 'chat') {
+      setTimeout(() => setShowBodySelector(true), 2000)
+    }
+  }, [view])
+
   // Check for emergency symptoms
   useEffect(() => {
     if (urgencyLevel === 'emergency') {
@@ -467,7 +574,7 @@ export default function App() {
     }
   }, [urgencyLevel])
 
-  useEffect(() => {
+  const initSpeechRecognition = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition
       recognitionRef.current = new SR()
@@ -483,48 +590,80 @@ export default function App() {
       }
       recognitionRef.current.onerror = () => setIsListening(false)
       recognitionRef.current.onend = () => setIsListening(false)
+      return true
     }
+    return false
+  }
+
+  useEffect(() => {
+    initSpeechRecognition()
   }, [detectedLang])
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // AbortController for TTS fetch — prevents overlapping requests
+  const ttsAbortRef = useRef(null)
+  const ttsRequestIdRef = useRef(0)  // Monotonic ID to discard stale responses
+
   const speak = async (text) => {
     if (!voiceEnabled || !text) return
-    // Stop any current audio
+    
+    // Cancel any in-flight TTS fetch
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort()
+      ttsAbortRef.current = null
+    }
+    
+    // Stop any currently playing audio
     if (audioRef.current) {
       audioRef.current.pause()
+      audioRef.current.currentTime = 0
       audioRef.current = null
     }
-    window.speechSynthesis.cancel()
+    window.speechSynthesis && window.speechSynthesis.cancel()
     
     const lang = detectedLang || detectLanguage(text)
     const clean = text.replace(/\*\*/g,'').replace(/[\u{1F300}-\u{1F9FF}]/gu,'').replace(/\n+/g,'. ').trim()
     if (!clean) return
     
+    // Truncate very long text for TTS (keep generous limit for non-Latin scripts like Tamil)
+    const ttsText = clean.length > 800 ? clean.substring(0, 800) + '...' : clean
+    
     setIsSpeaking(true)
     
+    // Assign a unique ID so we can discard stale responses
+    const requestId = ++ttsRequestIdRef.current
+    const abortController = new AbortController()
+    ttsAbortRef.current = abortController
+    
     try {
-      // Use backend Edge TTS with user preferences for personalized voice
       const ttsRequest = { 
-        text: clean, 
+        text: ttsText, 
         language: lang,
         gender: userPrefs.tts_gender || 'female',
         speed: userPrefs.tts_speed || 'normal'
       }
       
-      // Log TTS settings for debugging
       console.log('🔊 TTS Request:', { 
         lang, 
         gender: ttsRequest.gender, 
         speed: ttsRequest.speed,
-        age_group: userPrefs.age_group 
+        textLen: ttsText.length
       })
       
       const res = await fetch(`${API_BASE}/tts/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ttsRequest)
+        body: JSON.stringify(ttsRequest),
+        signal: abortController.signal
       })
+      
+      // Discard if a newer speak() was called while we were waiting
+      if (requestId !== ttsRequestIdRef.current) {
+        console.log('🔇 Discarding stale TTS response')
+        setIsSpeaking(false)
+        return
+      }
       
       if (!res.ok) throw new Error('TTS failed')
       
@@ -543,24 +682,42 @@ export default function App() {
         setIsSpeaking(false)
         URL.revokeObjectURL(audioUrl)
         audioRef.current = null
-        // Fallback to browser TTS
-        fallbackSpeak(clean, lang)
       }
       
       await audio.play()
     } catch (e) {
+      if (e.name === 'AbortError') {
+        // speak() was intentionally cancelled — don't fallback
+        console.log('🔇 TTS request cancelled')
+        setIsSpeaking(false)
+        return
+      }
       console.error('Backend TTS error, using fallback:', e)
-      // Fallback to browser SpeechSynthesis
-      fallbackSpeak(clean, lang)
+      // Fallback to browser SpeechSynthesis only if this is still the active request
+      if (requestId === ttsRequestIdRef.current) {
+        fallbackSpeak(ttsText, lang)
+      } else {
+        setIsSpeaking(false)
+      }
     }
   }
   
   // Fallback to browser TTS if backend fails
   const fallbackSpeak = (clean, lang) => {
+    if (!window.speechSynthesis) {
+      console.warn('speechSynthesis not available (WebView)')
+      setIsSpeaking(false)
+      return
+    }
+    window.speechSynthesis.cancel()  // Ensure no overlap
     const doSpeak = () => {
+      if (!window.SpeechSynthesisUtterance || !window.speechSynthesis) {
+        setIsSpeaking(false)
+        return
+      }
       const u = new SpeechSynthesisUtterance(clean)
       u.lang = getSpeechLang(lang)
-      u.rate = 0.85
+      u.rate = 0.95
       const voices = window.speechSynthesis.getVoices()
       const v = voices.find(x => x.lang.startsWith(lang)) || voices[0]
       if (v) u.voice = v
@@ -569,22 +726,40 @@ export default function App() {
       u.onerror = () => setIsSpeaking(false)
       window.speechSynthesis.speak(u)
     }
-    if (window.speechSynthesis.getVoices().length === 0) {
-      window.speechSynthesis.onvoiceschanged = doSpeak
-    } else doSpeak()
+    if (window.speechSynthesis) {
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = doSpeak
+      } else doSpeak()
+    } else {
+      doSpeak()
+    }
   }
 
   const stopSpeaking = () => {
+    // Cancel any in-flight TTS fetch
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort()
+      ttsAbortRef.current = null
+    }
+    ttsRequestIdRef.current++  // Invalidate any pending response
     if (audioRef.current) {
       audioRef.current.pause()
+      audioRef.current.currentTime = 0
       audioRef.current = null
     }
-    window.speechSynthesis.cancel()
+    window.speechSynthesis && window.speechSynthesis.cancel()
     setIsSpeaking(false)
   }
 
   const toggleListening = () => {
-    if (!recognitionRef.current) { alert('Speech not supported'); return }
+    // Lazily initialize speech recognizer (needed for Android WebView where
+    // the native polyfill is injected after React's initial useEffect runs)
+    if (!recognitionRef.current) {
+      if (!initSpeechRecognition()) {
+        alert('Speech not supported')
+        return
+      }
+    }
     if (isListening) { recognitionRef.current.stop(); setIsListening(false) }
     else { recognitionRef.current.start(); setIsListening(true) }
   }
@@ -705,13 +880,16 @@ export default function App() {
   }
 
   const checkProfileAndStart = async () => {
-    if (!phone.trim()) return alert('Enter phone number')
+    // Use auth email as identifier if no phone set
+    const userId = phone.trim() || authUser?.email || ''
+    if (!userId) return alert('Please sign in first')
+    if (!phone.trim() && authUser?.email) setPhone(authUser.email)
     setLoading(true)
     try {
       // First check if profile exists
       const checkRes = await fetch(`${API_BASE}/profile/check`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: phone })
+        body: JSON.stringify({ phone_number: userId })
       })
       const checkData = await checkRes.json()
       
@@ -851,21 +1029,39 @@ export default function App() {
       return newSymptoms
     })
     
-    // Create a message about the pain locations and send it
-    const painMessage = `I have pain in my ${bodyPartNames.join(', ')}`
+    // Build pain message in the user's selected language
+    const bodyPartList = bodyPartNames.join(', ')
+    const lang = detectedLang || language || 'en'
     
-    // Add user message showing what they selected
-    setMessages(m => [...m, { 
-      role: 'user', 
-      text: `🫀 ${painMessage}`, 
-      time: new Date(),
-      isBodySelection: true 
-    }])
+    // Pain message templates for supported languages
+    const painTemplates = {
+      'ta': `எனக்கு ${bodyPartList} பகுதியில் வலி உள்ளது`,
+      'hi': `मुझे ${bodyPartList} में दर्द है`,
+      'te': `నాకు ${bodyPartList} లో నొప్పి ఉంది`,
+      'kn': `ನನಗೆ ${bodyPartList} ನಲ್ಲಿ ನೋವು ಇದೆ`,
+      'ml': `എനിക്ക് ${bodyPartList} ൽ വേദന ഉണ്ട്`,
+      'bn': `আমার ${bodyPartList} এ ব্যথা আছে`,
+      'mr': `मला ${bodyPartList} मध्ये वेदना आहे`,
+      'gu': `મને ${bodyPartList} માં દુખાવો છે`,
+      'pa': `ਮੈਨੂੰ ${bodyPartList} ਵਿੱਚ ਦਰਦ ਹੈ`,
+      'ur': `مجھے ${bodyPartList} میں درد ہے`,
+    }
+    
+    const painMessage = painTemplates[lang] || `I have pain in my ${bodyPartList}`
+    
+    // Cancel any ongoing request first before sending new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
     
     // Send this as a message to get diagnosis
+    // Use a short delay to let the abort settle, then force-send even if loading
     setTimeout(() => {
-      sendMsg(painMessage)
-    }, 100)
+      // Reset loading state so sendMsg doesn't get blocked
+      setLoading(false)
+      sendMsg(painMessage, true)
+    }, 200)
   }
 
   // Fetch detailed info about a condition - uses fast llama3.2:3b model (~2-3 sec)
@@ -899,24 +1095,31 @@ export default function App() {
     }
   }
 
-  const sendMsg = async (override) => {
+  const sendMsg = async (override, fromBodySelector = false) => {
     const msg = override || input
     if (!msg.trim() || loading) return
     
     // Check if user mentions pain - offer 3D body selector
-    const painKeywords = ['pain', 'hurt', 'hurts', 'ache', 'aching', 'sore', 'painful', 
-                          'வலி', 'நோவு', 'दर्द', 'పెయిన్', 'നോവ്', 'ব্যথা']
-    const msgLower = msg.toLowerCase()
-    const mentionsPain = painKeywords.some(k => msgLower.includes(k))
-    
-    // If mentions pain but no specific body part, offer the selector
-    const bodyParts = ['head', 'chest', 'back', 'stomach', 'arm', 'leg', 'knee', 'shoulder', 'neck', 'eye', 'ear', 'throat']
-    const hasBodyPart = bodyParts.some(p => msgLower.includes(p))
-    
-    if (mentionsPain && !hasBodyPart) {
-      // Show the 3D body selector to help locate pain
-      setShowBodySelector(true)
-      // Still continue with the message so user gets a response
+    // Skip this if message came from body selector (to prevent reopening)
+    if (!fromBodySelector) {
+      const painKeywords = ['pain', 'hurt', 'hurts', 'ache', 'aching', 'sore', 'painful', 
+                            'வலி', 'நோவு', 'दर्द', 'పెయిన్', 'നോവ്', 'ব্যথা']
+      const msgLower = msg.toLowerCase()
+      const mentionsPain = painKeywords.some(k => msgLower.includes(k))
+      
+      // If mentions pain but no specific body part, offer the selector
+      const bodyParts = ['head', 'chest', 'back', 'stomach', 'arm', 'leg', 'knee', 'shoulder', 
+                         'neck', 'eye', 'ear', 'throat', 'wrist', 'ankle', 'hip', 'elbow', 
+                         'calf', 'thigh', 'shin', 'foot', 'toe', 'finger', 'hand', 'rib', 
+                         'pelvis', 'groin', 'jaw', 'temple', 'forehead', 'abdomen', 'lower back',
+                         'upper back', 'bicep', 'forearm', 'heel']
+      const hasBodyPart = bodyParts.some(p => msgLower.includes(p))
+      
+      if (mentionsPain && !hasBodyPart) {
+        // Show the 3D body selector to help locate pain
+        setShowBodySelector(true)
+        // Still continue with the message so user gets a response
+      }
     }
     
     // Detect language from user's message
@@ -940,7 +1143,10 @@ export default function App() {
     setMessages(m => [...m, { role: 'user', text: msg, time: new Date() }])
     setLoading(true)
     
-    // Create AbortController for this request
+    // Abort any previous in-flight request before starting new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
     abortControllerRef.current = new AbortController()
     
     try {
@@ -1049,11 +1255,15 @@ export default function App() {
         }))
       }
       
-      speak(txt)
+      // Auto-speak the response (use displayText so correct language is spoken)
+      speak(displayText)
     } catch (e) { 
-      // Check if request was aborted (user cancelled)
+      // Check if request was aborted
       if (e.name === 'AbortError') {
-        setMessages(m => [...m, { role: 'assistant', text: '⏹️ Response cancelled by user.', time: new Date() }])
+        // Only show "cancelled" if user explicitly cancelled (not replaced by a new request)
+        // If a new request replaced this one, abortControllerRef will have a different controller
+        // Don't add a cancelled message — the new request will provide the response
+        console.log('🔇 Request aborted (replaced or cancelled)')
       } else {
         setMessages(m => [...m, { role: 'assistant', text: 'Error occurred', time: new Date() }]) 
       }
@@ -1062,7 +1272,7 @@ export default function App() {
     setLoading(false)
   }
 
-  // Cancel ongoing request
+  // Cancel ongoing request (user explicitly clicks cancel)
   const cancelRequest = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -1070,12 +1280,13 @@ export default function App() {
     }
     stopSpeaking()
     setLoading(false)
+    setMessages(m => [...m, { role: 'assistant', text: '⏹️ Response cancelled.', time: new Date() }])
   }
 
   // Export chat as text file
   const exportChat = () => {
     const content = [
-      '=== CMC Health Consultation ===',
+      '=== Atlas Health Consultation ===',
       `Date: ${new Date().toLocaleString()}`,
       `Phone: ${phone}`,
       `Language: ${langNames[language]}`,
@@ -1181,6 +1392,86 @@ export default function App() {
     }
   }
 
+  // Drag-and-drop image handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current++
+    const types = e.dataTransfer.types
+    if (types.includes('Files') || types.includes('text/html') || types.includes('text/uri-list')) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    dragCounterRef.current = 0
+
+    // Case 1: File dragged from desktop/file manager
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image too large. Max 10MB')
+        return
+      }
+      setSelectedImage(file)
+      const reader = new FileReader()
+      reader.onload = (ev) => setImagePreview(ev.target.result)
+      reader.readAsDataURL(file)
+      setShowImageUpload(true)
+      return
+    }
+
+    // Case 2: Image dragged from another browser tab / web page
+    const html = e.dataTransfer.getData('text/html')
+    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')
+
+    let imgUrl = null
+    if (html) {
+      const match = html.match(/<img[^>]+src=["']([^"']+)["']/)
+      if (match) imgUrl = match[1]
+    }
+    if (!imgUrl && url && /\.(jpg|jpeg|png|gif|webp|bmp)/i.test(url)) {
+      imgUrl = url
+    }
+    if (!imgUrl && url && url.startsWith('http')) {
+      imgUrl = url
+    }
+
+    if (imgUrl) {
+      try {
+        const resp = await fetch(imgUrl)
+        const blob = await resp.blob()
+        if (!blob.type.startsWith('image/')) {
+          alert('Could not load image. Try saving it to your computer first, then drag the file.')
+          return
+        }
+        const imgFile = new File([blob], 'dropped-image.jpg', { type: blob.type })
+        setSelectedImage(imgFile)
+        setImagePreview(URL.createObjectURL(blob))
+        setShowImageUpload(true)
+      } catch {
+        alert('Could not load image from that source. Try right-click → Save Image, then drag the saved file.')
+      }
+    }
+  }
+
   const analyzeImage = async (context = '') => {
     if (!selectedImage) return
     setImageAnalyzing(true)
@@ -1190,7 +1481,9 @@ export default function App() {
       const formData = new FormData()
       formData.append('file', selectedImage)
       formData.append('context', context)
-      formData.append('image_type', 'skin')
+      formData.append('image_type', 'general')
+      formData.append('session_id', sessionId || 'image_session')
+      formData.append('language', language || 'en')
       
       const res = await fetch(`${API_BASE}/image/analyze`, {
         method: 'POST',
@@ -1201,12 +1494,51 @@ export default function App() {
       
       if (data.success) {
         setImageResult(data)
-        // Add to chat
+        
+        // Use 'response' (from full pipeline) with fallback to 'analysis' (legacy)
+        const responseText = data.response_translated || data.response || data.analysis || ''
+        
+        // Add to chat messages
         setMessages(m => [...m, 
-          { role: 'user', text: `[📷 Image uploaded] ${context || 'Please analyze this image'}`, time: new Date(), image: imagePreview },
-          { role: 'assistant', text: data.analysis, time: new Date(), severity: data.severity }
+          { role: 'user', text: context || '', time: new Date(), image: imagePreview },
+          { role: 'assistant', text: responseText, time: new Date(), severity: data.severity || data.urgency_level }
         ])
-        speak(data.analysis)
+        
+        // ── Update all the same state as normal text chat ──
+        
+        // Update diagnoses with confidence scores
+        if (data.diagnoses?.length > 0) {
+          console.log('🏥 Image diagnoses:', data.diagnoses)
+          setDiagnoses(data.diagnoses)
+          setShowDiagnosisPanel(true)
+        }
+        
+        // Update medications
+        if (data.medications?.length > 0) {
+          console.log('💊 Image medications:', data.medications)
+          setSuggestedMeds(data.medications)
+        }
+        
+        // Update follow-up questions
+        if (data.follow_up_questions?.length > 0) {
+          console.log('❓ Image follow-up questions:', data.follow_up_questions)
+          setFollowUpQuestions(data.follow_up_questions)
+        }
+        
+        // Update triage information
+        if (data.triage) {
+          setTriageInfo(data.triage)
+          if (data.triage.level === 'emergency') {
+            setShowEmergency(true)
+          }
+        }
+        
+        // Update detected symptoms
+        if (data.symptoms_detected?.length > 0) {
+          setDetectedSymptoms(prev => [...new Set([...(prev || []), ...data.symptoms_detected])])
+        }
+        
+        speak(responseText)
       } else {
         alert(data.detail || 'Analysis failed')
       }
@@ -1262,46 +1594,305 @@ export default function App() {
     tap: { scale: 0.95 }
   }
 
-  if (view === 'home') {
+  if (view === 'home' && !authUser) {
+    // ─── New Premium Welcome/Auth Page ──────────────────────
     return (
-      <div className="app-container premium-theme">
-        {/* WebGL Background */}
-        <WebGLBackground />
-        
+      <WelcomePage
+        onAuthenticated={handleAuthenticated}
+        language={language}
+        setLanguage={(l) => { setLanguage(l); setDetectedLang(l) }}
+        langNames={langNames}
+      />
+    )
+  }
+
+  if (view === 'home' && authUser) {
+    // ─── Premium Authenticated Dashboard ──────────────────────
+    return (
+      <div className="wlc-page" style={{ minHeight: '100vh' }}>
+        {/* Background effects — same as login page */}
+        <div className="wlc-orbs">
+          <div className="wlc-orb wlc-orb-1" />
+          <div className="wlc-orb wlc-orb-2" />
+          <div className="wlc-orb wlc-orb-3" />
+        </div>
+        <div className="wlc-particles">
+          {Array.from({ length: 20 }, (_, i) => (
+            <motion.div
+              key={i}
+              className="wlc-particle"
+              style={{ left: `${Math.random()*100}%`, top: `${Math.random()*100}%`, width: Math.random()*3+1, height: Math.random()*3+1 }}
+              animate={{ y: [0, -30, 0], opacity: [0, 0.5, 0] }}
+              transition={{ duration: Math.random()*15+10, delay: Math.random()*5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
+        <svg className="wlc-grid-pattern" width="100%" height="100%">
+          <defs><pattern id="grid2" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" /></pattern></defs>
+          <rect width="100%" height="100%" fill="url(#grid2)" />
+        </svg>
+
+        {/* Nav Bar */}
+        <motion.nav
+          className="wlc-nav"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="wlc-nav-left">
+            <motion.div className="wlc-nav-logo" animate={{ boxShadow: ['0 0 15px rgba(0,212,170,0.3)','0 0 30px rgba(0,212,170,0.5)','0 0 15px rgba(0,212,170,0.3)'] }} transition={{ duration: 2, repeat: Infinity }}>
+              <img src={atlasLogo} alt="Atlas" className="wlc-nav-logo-img" />
+            </motion.div>
+            <span className="wlc-nav-brand">Atlas</span>
+            <span className="wlc-nav-badge">AI-Powered</span>
+          </div>
+          <div className="wlc-nav-right" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0.8rem 0.35rem 0.4rem', background: 'rgba(255,255,255,0.05)', borderRadius: '99px', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {authUser?.picture ? (
+                <img src={authUser.picture} alt="" referrerPolicy="no-referrer" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #00d4aa, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
+                  {(authUser?.name || '?')[0].toUpperCase()}
+                </div>
+              )}
+              <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{authUser?.name || 'User'}</span>
+            </div>
+            <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '0.45rem 0.9rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s' }}
+              onMouseEnter={e => { e.target.style.borderColor = 'rgba(239,68,68,0.3)'; e.target.style.color = '#fca5a5' }}
+              onMouseLeave={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.color = 'rgba(255,255,255,0.5)' }}
+            >Sign Out</button>
+          </div>
+        </motion.nav>
+
+        {/* Main Dashboard Content */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', position: 'relative', zIndex: 5 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+            style={{ width: '100%', maxWidth: '900px' }}
+          >
+            {/* Profile Hero Card */}
+            <motion.div
+              style={{
+                background: 'linear-gradient(165deg, rgba(20,25,40,0.95) 0%, rgba(12,16,28,0.98) 100%)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '24px',
+                overflow: 'hidden',
+                boxShadow: '0 24px 80px -12px rgba(0,0,0,0.5), 0 0 100px -20px rgba(0,212,170,0.08)',
+                position: 'relative',
+              }}
+            >
+              {/* Top glow */}
+              <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)', width: 250, height: 3, background: 'linear-gradient(90deg, transparent, #00d4aa, #6366f1, transparent)', borderRadius: '0 0 99px 99px', opacity: 0.8 }} />
+
+              {/* Hero Banner */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(0,212,170,0.08) 0%, rgba(99,102,241,0.06) 50%, rgba(139,92,246,0.04) 100%)',
+                padding: '2.5rem 2.5rem 2rem',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1.5rem',
+              }}>
+                {/* Profile Pic */}
+                <motion.div
+                  animate={{ scale: [1, 1.03, 1] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                  style={{ position: 'relative', flexShrink: 0 }}
+                >
+                  {authUser?.picture ? (
+                    <img src={authUser.picture} alt="" referrerPolicy="no-referrer" style={{ width: 80, height: 80, borderRadius: '50%', border: '3px solid rgba(0,212,170,0.4)', boxShadow: '0 8px 30px rgba(0,212,170,0.25)', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #00d4aa, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 700, color: '#fff', boxShadow: '0 8px 30px rgba(0,212,170,0.25)' }}>
+                      {(authUser?.name || authUser?.email || '?')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: 2, right: 2, width: 20, height: 20, borderRadius: '50%', background: '#22c55e', border: '3px solid rgba(12,16,28,0.98)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />
+                  </div>
+                </motion.div>
+
+                {/* User Info */}
+                <div style={{ flex: 1 }}>
+                  <h1 style={{ fontFamily: "'Space Grotesk', 'Inter', sans-serif", fontSize: 'clamp(1.4rem, 3vw, 1.8rem)', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: '#fff' }}>
+                    Welcome back, <span style={{ background: 'linear-gradient(135deg, #00d4aa, #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{authUser?.name || 'User'}</span>
+                  </h1>
+                  <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)' }}>
+                    {authUser?.email} • {authUser?.provider === 'google' ? '🔒 Google Account' : '🔒 Email Account'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Actions Grid */}
+              <div style={{ padding: '2rem 2.5rem' }}>
+                {/* Section Title */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', color: '#00d4aa', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  <span style={{ width: 20, height: 1, background: '#00d4aa' }} />
+                  Configure Your Session
+                </div>
+
+                {/* Preferences Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {/* Language Selector */}
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '1rem 1.25rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.65rem' }}>
+                      <span style={{ fontSize: '1rem' }}>🌐</span> Language
+                    </label>
+                    <select
+                      value={language}
+                      onChange={e => { setLanguage(e.target.value); setDetectedLang(e.target.value) }}
+                      style={{ width: '100%', padding: '0.7rem 0.9rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff', fontSize: '0.9rem', outline: 'none', cursor: 'pointer', boxSizing: 'border-box', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.8rem center' }}
+                    >
+                      {Object.entries(langNames).map(([c, n]) => <option key={c} value={c} style={{ background: '#1a1f2e' }}>{n}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Voice Toggle */}
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.65rem' }}>
+                      <span style={{ fontSize: '1rem' }}>🔊</span> Voice Responses
+                    </label>
+                    <div
+                      onClick={() => setVoiceEnabled(!voiceEnabled)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.6rem 0.9rem', background: voiceEnabled ? 'rgba(0,212,170,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${voiceEnabled ? 'rgba(0,212,170,0.25)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '10px', transition: 'all 0.2s' }}
+                    >
+                      <div style={{ width: 38, height: 20, borderRadius: 99, background: voiceEnabled ? '#00d4aa' : 'rgba(255,255,255,0.15)', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
+                        <motion.div animate={{ x: voiceEnabled ? 18 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+                      </div>
+                      <span style={{ fontSize: '0.85rem', color: voiceEnabled ? '#00d4aa' : 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
+                        {voiceEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature Quick-Access Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.75rem' }}>
+                  {[
+                    { icon: '🧠', label: 'AI Diagnosis', color: '#00d4aa' },
+                    { icon: '📸', label: 'Image Scan', color: '#6366f1' },
+                    { icon: '🦴', label: 'Body Map', color: '#f59e0b' },
+                    { icon: '💊', label: 'Drug Info', color: '#8b5cf6' },
+                  ].map((feat, i) => (
+                    <motion.div
+                      key={i}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{
+                        background: `linear-gradient(135deg, ${feat.color}10, ${feat.color}05)`,
+                        border: `1px solid ${feat.color}30`,
+                        borderRadius: '12px',
+                        padding: '1rem 0.75rem',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>{feat.icon}</div>
+                      <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.02em' }}>{feat.label}</div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Start Button */}
+                <motion.button
+                  onClick={() => {
+                    if (!phone && authUser?.email) setPhone(authUser.email)
+                    checkProfileAndStart()
+                  }}
+                  disabled={loading}
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  style={{
+                    width: '100%',
+                    padding: '1rem 1.5rem',
+                    background: 'linear-gradient(135deg, #00d4aa 0%, #00b894 100%)',
+                    border: 'none',
+                    borderRadius: '14px',
+                    color: '#000',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    fontFamily: "'Inter', sans-serif",
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.6rem',
+                    boxShadow: '0 8px 30px -4px rgba(0,212,170,0.4)',
+                    transition: 'all 0.2s',
+                    opacity: loading ? 0.7 : 1,
+                  }}
+                >
+                  {loading ? (
+                    <div style={{ width: 22, height: 22, border: '2.5px solid rgba(0,0,0,0.2)', borderTopColor: '#000', borderRadius: '50%', animation: 'wlc-spin 0.7s linear infinite' }} />
+                  ) : (
+                    <>
+                      <StethoscopeIcon size={22} />
+                      <span>Start Consultation</span>
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                    </>
+                  )}
+                </motion.button>
+              </div>
+
+              {/* Bottom Info Strip */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '2rem',
+                padding: '1rem 2.5rem',
+                borderTop: '1px solid rgba(255,255,255,0.04)',
+                background: 'rgba(0,0,0,0.15)',
+              }}>
+                {[
+                  { icon: '🔒', text: 'End-to-end encrypted' },
+                  { icon: '⚡', text: 'AI responds in < 2s' },
+                  { icon: '🏥', text: 'Clinical-grade analysis' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)' }}>
+                    <span>{item.icon}</span>
+                    <span>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+
         {/* Medical Disclaimer Modal */}
         <AnimatePresence>
           {showDisclaimer && (
-            <motion.div 
-              className="modal-overlay"
+            <motion.div
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <motion.div 
-                className="modal"
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
+                style={{ background: 'linear-gradient(165deg, rgba(20,25,40,0.98), rgba(12,16,28,0.98))', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px', padding: '2rem', maxWidth: 500, width: '100%', boxShadow: '0 25px 80px rgba(0,0,0,0.6)' }}
               >
-                <div className="modal-header">
-                  <AlertIcon />
-                  <h2>Medical Disclaimer</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '12px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>⚠️</div>
+                  <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#fff' }}>Medical Disclaimer</h2>
                 </div>
-                <div className="modal-content">
-                  <p><strong>Important:</strong> CMC Health is an AI-powered health information tool and is NOT a substitute for professional medical advice, diagnosis, or treatment.</p>
-                  <ul>
-                    <li>Always consult a qualified healthcare provider for medical concerns</li>
-                    <li>In case of emergency, call 108 (India) or your local emergency number</li>
-                    <li>Do not ignore professional medical advice based on AI suggestions</li>
-                    <li>The AI may make mistakes - verify important information</li>
+                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+                  <p style={{ margin: '0 0 0.75rem' }}><strong style={{ color: '#fff' }}>Important:</strong> Atlas is an AI-powered health information tool and is NOT a substitute for professional medical advice, diagnosis, or treatment.</p>
+                  <ul style={{ paddingLeft: '1.25rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <li>Always consult a qualified healthcare provider</li>
+                    <li>In emergency, call 108 (India) or local emergency number</li>
+                    <li>Do not ignore professional advice based on AI suggestions</li>
+                    <li>The AI may make mistakes — verify important information</li>
                   </ul>
-                  <p>By using this app, you acknowledge that you understand these limitations.</p>
                 </div>
-                <motion.button 
-                  className="modal-btn" 
+                <motion.button
                   onClick={() => { localStorage.setItem('cmc_disclaimer_accepted', 'true'); setShowDisclaimer(false) }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  style={{ width: '100%', padding: '0.85rem', background: 'linear-gradient(135deg, #00d4aa, #00b894)', border: 'none', borderRadius: '12px', color: '#000', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,212,170,0.3)' }}
                 >
                   I Understand
                 </motion.button>
@@ -1309,116 +1900,8 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        
-        <motion.header 
-          className="header"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <div className="logo-container">
-            <motion.div 
-              className="logo premium-logo"
-              animate={{ 
-                boxShadow: ["0 0 20px rgba(0, 212, 170, 0.3)", "0 0 40px rgba(0, 212, 170, 0.5)", "0 0 20px rgba(0, 212, 170, 0.3)"]
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <MedicalCrossIcon size={32} />
-            </motion.div>
-            <h1 className="app-title premium-title">CMC Health</h1>
-          </div>
-          <motion.p 
-            className="app-subtitle"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            AI-Powered Health Assistant
-          </motion.p>
-        </motion.header>
-        
-        <motion.main 
-          className="main-content"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.div 
-            className="glass-card premium-card"
-            variants={cardVariants}
-            whileHover="hover"
-          >
-            <div className="status-bar">
-              <motion.div 
-                className="status-indicator"
-                animate={{ opacity: [0.7, 1, 0.7] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <span className={`status-dot ${connected ? 'pulse' : 'offline'}`}></span>
-                {connected ? 'Ready' : 'Offline'}
-              </motion.div>
-            </div>
-            
-            <motion.div className="welcome-message" variants={itemVariants}>
-              <motion.div 
-                className="welcome-icon premium-welcome-icon"
-                animate={{ 
-                  rotate: [0, 5, -5, 0],
-                  scale: [1, 1.05, 1]
-                }}
-                transition={{ duration: 3, repeat: Infinity }}
-              >
-                <HeartPulseIcon size={48} />
-              </motion.div>
-              <h2 className="welcome-title">Welcome to CMC Health</h2>
-              <p className="welcome-text">Your personal AI health assistant. Get instant guidance in your language.</p>
-            </motion.div>
-            
-            <motion.div className="input-area" variants={itemVariants}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display:'block', fontSize:'0.875rem', color:'var(--text-secondary)', marginBottom:'0.5rem', fontWeight:'500' }}>Phone Number</label>
-                <motion.input 
-                  type="tel" 
-                  className="input-field premium-input" 
-                  value={phone} 
-                  onChange={e => setPhone(e.target.value)} 
-                  placeholder="+91 9876543210" 
-                  style={{ width:'100%' }}
-                  whileFocus={{ boxShadow: "0 0 0 3px rgba(0, 212, 170, 0.3)" }}
-                />
-              </div>
-              <div className="language-selector" style={{ marginBottom:'1rem', justifyContent:'flex-start' }}>
-                <label>Language</label>
-                <select className="language-select premium-select" value={language} onChange={e => { setLanguage(e.target.value); setDetectedLang(e.target.value) }}>
-                  {Object.entries(langNames).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-                </select>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'1.5rem' }}>
-                <input type="checkbox" id="voice" checked={voiceEnabled} onChange={e => setVoiceEnabled(e.target.checked)} style={{ width:'18px', height:'18px', accentColor:'var(--accent-teal)' }} />
-                <label htmlFor="voice" style={{ fontSize:'0.9rem', color:'var(--text-secondary)', cursor:'pointer' }}>Enable voice responses</label>
-              </div>
-              <motion.button 
-                className="action-btn send-btn premium-btn" 
-                onClick={checkProfileAndStart} 
-                disabled={loading} 
-                style={{ width:'100%', height:'50px', fontSize:'1rem', fontWeight:'600' }}
-                variants={buttonVariants}
-                whileHover="hover"
-                whileTap="tap"
-              >
-                {loading ? <div className="loading-spinner"></div> : (
-                  <>
-                    <StethoscopeIcon size={20} />
-                    <span style={{ marginLeft: '0.5rem' }}>Start Consultation</span>
-                  </>
-                )}
-              </motion.button>
-            </motion.div>
-          </motion.div>
-        </motion.main>
-        
-        {/* Premium Profile Creation Modal */}
+
+        {/* Profile Creation Modal */}
         <AnimatePresence>
           {showProfileForm && (
             <motion.div 
@@ -2079,21 +2562,23 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        
-        <motion.footer 
-          className="footer"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-        >
-          <p>For informational purposes only. Consult a healthcare professional.</p>
-        </motion.footer>
+
+        {/* Footer */}
+        <div className="wlc-footer">
+          <p>For informational purposes only. Always consult a qualified healthcare professional.</p>
+          <p>© 2026 Atlas. All rights reserved.</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="app-container premium-theme with-sidebar">
+      {/* PWA: Offline indicator, install prompt, update banner */}
+      <OfflineIndicator />
+      <InstallPrompt />
+      <UpdateBanner />
+
       {/* Session Sidebar */}
       {view === 'chat' && phone && (
         <SessionSidebar
@@ -2229,52 +2714,85 @@ export default function App() {
         </div>
       )}
       
-      <motion.header 
-        className="header"
+      {/* Premium Background Decorations */}
+      <div className="premium-chat-bg">
+        <div className="chat-orb chat-orb-1" />
+        <div className="chat-orb chat-orb-2" />
+        <div className="chat-orb chat-orb-3" />
+        <div className="chat-grid" />
+      </div>
+
+      {/* Premium Chat Navigation */}
+      <motion.nav
+        className="premium-chat-nav"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="logo-container">
-          <motion.div 
-            className="logo premium-logo" 
-            onClick={() => { setView('home'); stopSpeaking() }} 
-            style={{ cursor:'pointer' }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
+        <div className="nav-left">
+          <motion.div
+            className="nav-brand"
+            onClick={() => { setView('home'); stopSpeaking() }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
-            <MedicalCrossIcon size={28} />
+            <div className="nav-brand-icon"><img src={atlasLogo} alt="Atlas" className="nav-brand-logo" /></div>
+            <span className="nav-brand-text">Atlas</span>
           </motion.div>
-          <h1 className="app-title premium-title">CMC Health</h1>
         </div>
-        <p className="app-subtitle">Health Consultation</p>
-      </motion.header>
-      <motion.main 
-        className="main-content"
+
+        <div className="nav-center">
+          <div className={`nav-status-pill ${connected ? '' : 'offline'}`}>
+            <span className="status-dot-live" />
+            <span>{connected ? 'AI Online' : 'Reconnecting...'}</span>
+          </div>
+        </div>
+
+        <div className="nav-actions">
+          <button className="nav-action-btn" onClick={exportChat} title="Export Chat"><DownloadIcon /></button>
+          <button className="nav-action-btn" onClick={clearSession} title="Clear Session"><TrashIcon /></button>
+          <select className="nav-lang-select" value={detectedLang} onChange={e => setDetectedLang(e.target.value)}>
+            {Object.entries(langNames).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+          </select>
+          {authUser && (
+            <div className="nav-user-pill" title={authUser.name || authUser.email}>
+              {authUser.picture ? (
+                <img src={authUser.picture} alt="" className="nav-user-avatar" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="nav-user-avatar-fallback">
+                  {(authUser.name || authUser.email || '?')[0].toUpperCase()}
+                </div>
+              )}
+              <span className="nav-user-name">{(authUser.name || '').split(' ')[0]}</span>
+            </div>
+          )}
+        </div>
+      </motion.nav>
+
+      <motion.div
+        className="premium-chat-layout"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.15 }}
       >
         <motion.div 
-          className="glass-card premium-card"
+          className="premium-chat-card"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          style={{ position: 'relative' }}
         >
-          <div className="status-bar">
-            <div className="status-indicator">
-              <span className={`status-dot ${connected ? '' : 'offline'}`}></span>
-              {connected ? 'AI Online' : 'Reconnecting...'}
+          {/* Drag-and-drop overlay */}
+          {isDragging && (
+            <div className="drag-overlay">
+              <div className="drag-overlay-content">
+                <CameraIcon />
+                <p>Drop image here to analyze</p>
+              </div>
             </div>
-            <div className="status-actions">
-              <button className="icon-btn" onClick={exportChat} title="Export Chat"><DownloadIcon /></button>
-              <button className="icon-btn" onClick={clearSession} title="Clear Session"><TrashIcon /></button>
-            </div>
-            <div className="language-selector">
-              <label>Language</label>
-              <select className="language-select" value={detectedLang} onChange={e => setDetectedLang(e.target.value)}>
-                {Object.entries(langNames).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-              </select>
-            </div>
-          </div>
+          )}
           
           {/* Symptoms & Triage Summary */}
           {(detectedSymptoms.length > 0 || triageInfo || urgencyLevel !== 'low') && (
@@ -2350,17 +2868,84 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* Google Fit Vitals Panel */}
+          {showVitals && (
+            <motion.div
+              className="vitals-panel"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="vitals-header">
+                <div className="vitals-header-left">
+                  <HeartPulseIcon size={16} />
+                  <span>Watch Vitals</span>
+                </div>
+                <button className="vitals-close-btn" onClick={() => setShowVitals(false)} title="Close">
+                  <XIcon />
+                </button>
+              </div>
+              {vitalsLoading ? (
+                <div className="vitals-loading">
+                  <span className="vitals-spinner"></span> Fetching from watch...
+                </div>
+              ) : vitalsError ? (
+                <div className="vitals-error">
+                  ⚠️ {vitalsError}
+                  <button className="vitals-retry" onClick={fetchVitals}>Retry</button>
+                </div>
+              ) : vitalsData ? (
+                <div className="vitals-grid">
+                  {vitalsData.heart_rate?.latest && (
+                    <div className="vital-card heart">
+                      <span className="vital-icon">❤️</span>
+                      <span className="vital-value">{Math.round(vitalsData.heart_rate.latest)}</span>
+                      <span className="vital-unit">bpm</span>
+                      <span className="vital-label">Heart Rate</span>
+                    </div>
+                  )}
+                  {vitalsData.spo2?.latest && (
+                    <div className="vital-card spo2">
+                      <span className="vital-icon">🫁</span>
+                      <span className="vital-value">{Math.round(vitalsData.spo2.latest)}</span>
+                      <span className="vital-unit">%</span>
+                      <span className="vital-label">SpO₂</span>
+                    </div>
+                  )}
+                  {vitalsData.heart_rate?.resting && (
+                    <div className="vital-card resting">
+                      <span className="vital-icon">💓</span>
+                      <span className="vital-value">{Math.round(vitalsData.heart_rate.resting)}</span>
+                      <span className="vital-unit">bpm</span>
+                      <span className="vital-label">Resting HR</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="vitals-empty">No vitals data available</div>
+              )}
+              {vitalsData?.alerts && vitalsData.alerts.length > 0 && (
+                <div className="vitals-alerts">
+                  {vitalsData.alerts.map((a, i) => (
+                    <div key={i} className={`vital-alert ${a.severity || 'info'}`}>
+                      ⚠️ {a.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* Medications Panel - Compact & Collapsible */}
           {suggestedMeds.length > 0 && (
             <motion.div 
-              className={`medications-panel ${medsExpanded ? 'expanded' : ''}`}
+              className={`medications-panel compact ${medsExpanded ? 'expanded' : ''}`}
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
             >
               <div className="medications-header">
                 <div className="meds-header-left" onClick={() => setMedsExpanded(!medsExpanded)}>
                   <PillIconComponent />
-                  <span>Suggested Medications ({suggestedMeds.length})</span>
+                  <span>Medications ({suggestedMeds.length})</span>
                   <span className="expand-icon">{medsExpanded ? '▲' : '▼'}</span>
                 </div>
                 <button 
@@ -2371,38 +2956,30 @@ export default function App() {
                   <XIcon />
                 </button>
               </div>
-              <div className="medications-list">
-                {(medsExpanded ? suggestedMeds : suggestedMeds.slice(0, 4)).map((med, i) => (
-                  <motion.div 
-                    key={i} 
-                    className="medication-card"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    title={`${med.name || med}${med.warning ? ` - ⚠️ ${med.warning}` : ''}`}
-                  >
-                    <div className="med-name">{med.name || med}</div>
-                    {med.dosage && <div className="med-dosage">{med.dosage}</div>}
-                    {med.frequency && <div className="med-frequency">{med.frequency}</div>}
-                    {med.warning && <div className="med-warning">⚠️ {med.warning}</div>}
-                  </motion.div>
-                ))}
-                {!medsExpanded && suggestedMeds.length > 4 && (
-                  <div className="medication-card" onClick={() => setMedsExpanded(true)} style={{cursor: 'pointer', justifyContent: 'center', alignItems: 'center'}}>
-                    <div className="med-name">+{suggestedMeds.length - 4} more</div>
-                  </div>
-                )}
-              </div>
-              <div className="medications-disclaimer">
-                ⚠️ Consult a doctor before taking any medication
-              </div>
+              {medsExpanded && (
+                <div className="medications-list">
+                  {suggestedMeds.slice(0, 6).map((med, i) => (
+                    <motion.div 
+                      key={i} 
+                      className="medication-card mini"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      title={`${med.name || med}${med.warning ? ` - ⚠️ ${med.warning}` : ''}`}
+                    >
+                      <div className="med-name">{med.name || med}</div>
+                      {med.dosage && <div className="med-dosage">{med.dosage}</div>}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
           
-          {/* NEW: Diagnosis Panel - Shows 5 possible conditions with confidence */}
+          {/* Diagnosis Panel - Compact */}
           {showDiagnosisPanel && diagnoses.length > 0 && (
             <motion.div 
-              className="diagnosis-panel"
+              className="diagnosis-panel compact"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
             >
@@ -2414,63 +2991,29 @@ export default function App() {
                 <button 
                   className="diagnosis-close-btn"
                   onClick={() => setShowDiagnosisPanel(false)}
-                  title="Close diagnosis panel"
+                  title="Close"
                 >
                   <XIcon />
                 </button>
               </div>
-              <div className="diagnosis-list">
+              <div className="diagnosis-list compact-list">
                 {diagnoses.slice(0, 5).map((d, i) => (
                   <motion.div 
                     key={i} 
-                    className={`diagnosis-card ${d.urgency || 'self_care'} clickable`}
+                    className={`diagnosis-card mini ${d.urgency || 'self_care'} clickable`}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
+                    transition={{ delay: i * 0.05 }}
                     onClick={() => fetchConditionDetails(d)}
-                    title="Click for more details"
+                    title="Click for details"
                     style={{ cursor: 'pointer' }}
                   >
-                    <div className="diagnosis-main">
-                      <div className="diagnosis-rank">#{i + 1}</div>
-                      <div className="diagnosis-info">
-                        <div className="diagnosis-name">{d.condition} <span className="click-hint">ℹ️</span></div>
-                        <div className="diagnosis-desc">{d.description}</div>
-                      </div>
-                    </div>
-                    <div className="diagnosis-confidence-wrapper">
-                      <div className="diagnosis-confidence-bar">
-                        <motion.div 
-                          className="diagnosis-confidence-fill"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.round(d.confidence * 100)}%` }}
-                          transition={{ delay: i * 0.1, duration: 0.5 }}
-                          style={{ 
-                            background: d.confidence > 0.7 ? 'linear-gradient(90deg, #00d4aa, #00c49a)' 
-                                      : d.confidence > 0.5 ? 'linear-gradient(90deg, #fbbf24, #f59e0b)'
-                                      : 'linear-gradient(90deg, #60a5fa, #3b82f6)'
-                          }}
-                        />
-                      </div>
-                      <span className="diagnosis-confidence-text">{Math.round(d.confidence * 100)}%</span>
-                    </div>
-                    {d.specialist && (
-                      <div className="diagnosis-specialist">
-                        <StethoscopeIconComponent /> {d.specialist}
-                      </div>
-                    )}
+                    <span className="diagnosis-rank-mini">#{i + 1}</span>
+                    <span className="diagnosis-name-mini">{d.condition}</span>
+                    <span className="diagnosis-pct-mini">{Math.round(d.confidence * 100)}%</span>
                   </motion.div>
                 ))}
               </div>
-              <div className="diagnosis-disclaimer">
-                ⚕️ These are AI-generated possibilities. Consult a doctor for proper diagnosis.
-              </div>
-              <button 
-                className="diagnosis-find-doctor-btn"
-                onClick={() => { setShowSpecialistFinder(true); setShowDiagnosisPanel(false); }}
-              >
-                🏥 Find a Specialist Near You
-              </button>
             </motion.div>
           )}
           
@@ -2478,18 +3021,25 @@ export default function App() {
             <div className="chat-webgl-bg">
               <WebGLBackground contained />
             </div>
-            <div className="chat-container">
+            <div className="premium-chat-container chat-container">
               {messages.length === 0 ? (
-                <div className="welcome-message">
-                  <div className="welcome-icon"><MessageIcon /></div>
-                  <h2 className="welcome-title">How can I help?</h2>
-                  <p className="welcome-text">Describe your symptoms or ask health questions.</p>
+                <div className="premium-welcome-msg">
+                  <div className="welcome-robot-animation">
+                    <dotlottie-wc 
+                      src="https://lottie.host/534fef36-80e8-4072-a726-2afecbe9467b/8J3QDVdUdW.lottie" 
+                      style={{ width: '200px', height: '200px' }}
+                      autoplay 
+                      loop
+                    />
+                  </div>
+                  <h2>How can I help you today?</h2>
+                  <p>Describe your symptoms, upload an image, or ask any health question.</p>
                 </div>
               ) : (
                 messages.map((m, i) => (
-                  <div key={i} className={`message ${m.role}`}>
-                    {m.role === 'assistant' && <div className="message-avatar"><BotIcon /></div>}
-                    <div className="message-content">
+                  <div key={i} className={`premium-msg message ${m.role}`}>
+                    {m.role === 'assistant' && <div className="msg-avatar message-avatar"><BotIcon /></div>}
+                    <div className="msg-bubble message-content">
                       {/* Triage level indicator */}
                       {m.role === 'assistant' && m.triage?.level && m.triage.level !== 'self_care' && (
                         <div className="message-triage-badge" style={{ borderLeftColor: m.triage.color }}>
@@ -2516,7 +3066,11 @@ export default function App() {
                         mentalHealth={m.mentalHealth}
                       />
                     ) : (
-                      <div className="user-message-text">{m.text}</div>
+                      <div className="user-message-text">
+                        {m.image && <img src={m.image} alt="Uploaded" className="user-message-image" />}
+                        {m.text && <span>{m.text}</span>}
+                        {!m.image && !m.text && <span>​</span>}
+                      </div>
                     )}
                     
                     <div className="message-footer">
@@ -2532,14 +3086,29 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  {m.role === 'user' && <div className="message-avatar"><UserIcon /></div>}
+                  {m.role === 'user' && (
+                    <div className="msg-avatar message-avatar user-profile-avatar">
+                      {authUser?.picture ? (
+                        <img src={authUser.picture} alt="" className="user-msg-pic" referrerPolicy="no-referrer" />
+                      ) : (
+                        <UserIcon />
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             )}
             {loading && (
-              <div className="message assistant">
-                <div className="message-avatar"><BotIcon /></div>
-                <div className="typing-indicator">
+              <div className="premium-msg message assistant">
+                <div className="msg-avatar message-avatar lottie-avatar">
+                  <dotlottie-wc 
+                    src="https://lottie.host/534fef36-80e8-4072-a726-2afecbe9467b/8J3QDVdUdW.lottie" 
+                    style={{ width: '36px', height: '36px' }}
+                    autoplay 
+                    loop
+                  />
+                </div>
+                <div className="premium-typing typing-indicator">
                   <span></span><span></span><span></span>
                   <button className="cancel-btn" onClick={cancelRequest} title="Cancel request">
                     <StopCircleIcon /> Cancel
@@ -2551,70 +3120,54 @@ export default function App() {
             </div>
           </div>
           
-          {/* NEW: Follow-up Questions - AI asks before diagnosing */}
-          {followUpQuestions.length > 0 && !loading && (
-            <motion.div 
-              className="follow-up-questions"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="follow-up-header">
-                <MessageIcon />
-                <span>Help me understand better:</span>
+          {/* Compact Input Area - All controls inline */}
+          <div className="premium-input-area">
+            <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+            <div className="premium-input-wrapper">
+              <div className="inline-actions">
+                <button className={`inline-btn ${isListening ? 'active' : ''}`} onClick={toggleListening} title="Voice input">
+                  <MicIcon />
+                </button>
+                <button className="inline-btn" onClick={() => imageInputRef.current?.click()} title="Camera">
+                  <CameraIcon />
+                </button>
+                <button className="inline-btn" onClick={() => setShowPrescription(true)} title="Prescription">
+                  <ClipboardMedicalIcon size={16} />
+                </button>
+                <button className="inline-btn" onClick={() => setShowBodySelector(true)} title="Body map">
+                  <BodyIcon size={16} color="#fff" />
+                </button>
+                <button className="inline-btn" onClick={() => setShowSpecialistFinder(true)} title="Find doctor">
+                  <StethoscopeIcon size={16} />
+                </button>
+                <button className={`inline-btn ${showVitals ? 'active' : ''}`} onClick={fetchVitals} title="Watch vitals">
+                  <HeartPulseIcon size={16} />
+                </button>
+                <button className={`inline-btn ${voiceEnabled ? 'active' : ''}`} onClick={() => isSpeaking ? stopSpeaking() : setVoiceEnabled(!voiceEnabled)} title="TTS">
+                  {voiceEnabled ? <VolumeIcon /> : <VolumeOffIcon />}
+                </button>
               </div>
-              <div className="follow-up-buttons">
-                {followUpQuestions.map((q, i) => (
-                  <motion.button
-                    key={i}
-                    className="follow-up-btn"
-                    onClick={() => {
-                      setInput(q)
-                      setFollowUpQuestions([])
-                    }}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <span className="follow-up-icon">❓</span>
-                    <span className="follow-up-text">{q}</span>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-          
-          <div className="quick-actions">
-            {quickActions.map((a, i) => <button key={i} className="quick-action-btn" onClick={() => sendMsg(a.msg)} disabled={loading}>{a.label}</button>)}
-          </div>
-          <div className="input-area">
-            <div className="input-wrapper">
-              <button className={`action-btn voice-btn ${isListening ? 'active' : ''}`} onClick={toggleListening}><MicIcon /></button>
-              <button className="action-btn camera-btn" onClick={() => imageInputRef.current?.click()} title="Upload image for analysis"><CameraIcon /></button>
-              <button className="action-btn body-btn" onClick={() => setShowBodySelector(true)} title="Show where it hurts"><BodyIcon size={18} color="#fff" /></button>
-              <button className="action-btn doctor-btn" onClick={() => setShowSpecialistFinder(true)} title="Find nearby doctors & online consultation"><StethoscopeIcon size={18} /></button>
-              <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
-              <div className="input-field-container">
-                <input type="text" className="input-field" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMsg()} placeholder={isListening ? 'Listening...' : 'Type message...'} disabled={loading} />
-              </div>
-              {/* Stop Speaking Button - shows when AI is speaking */}
+              <input 
+                type="text" 
+                className="input-field" 
+                value={input} 
+                onChange={e => setInput(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && sendMsg()} 
+                placeholder={isListening ? '🎤 Listening...' : 'Describe your symptoms...'} 
+                disabled={loading} 
+              />
               {isSpeaking && (
-                <button className="action-btn stop-btn" onClick={stopSpeaking} title="Stop speaking">
+                <button className="p-action-btn stop" onClick={stopSpeaking} title="Stop speaking">
                   <StopIcon />
                 </button>
               )}
-              <button className={`action-btn speaker-btn ${voiceEnabled ? 'active' : ''}`} onClick={() => isSpeaking ? stopSpeaking() : setVoiceEnabled(!voiceEnabled)}>
-                {voiceEnabled ? <VolumeIcon /> : <VolumeOffIcon />}
-              </button>
-              {/* Show Cancel button when loading, Send button otherwise */}
               {loading ? (
-                <button className="action-btn cancel-request-btn" onClick={cancelRequest} title="Cancel request">
+                <button className="p-action-btn cancel-req" onClick={cancelRequest} title="Cancel request">
                   <StopCircleIcon />
                 </button>
               ) : (
                 <motion.button 
-                  className="action-btn send-btn premium-send" 
+                  className="p-action-btn send" 
                   onClick={() => sendMsg()} 
                   disabled={!input.trim()}
                   whileHover={{ scale: 1.05 }}
@@ -2626,15 +3179,10 @@ export default function App() {
             </div>
           </div>
         </motion.div>
-      </motion.main>
-      <motion.footer 
-        className="footer"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-      >
+      </motion.div>
+      <div className="premium-chat-footer">
         <p>For informational purposes only. Consult a healthcare professional.</p>
-      </motion.footer>
+      </div>
 
       {/* Body Selector Modal */}
       <AnimatePresence>
@@ -2659,6 +3207,17 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Prescription Analyzer — Full-screen page overlay */}
+      {showPrescription && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#0a0e1a', overflowY: 'auto' }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => e.preventDefault()}
+        >
+          <PrescriptionPage onBack={() => setShowPrescription(false)} />
+        </div>
+      )}
 
       {/* Condition Details Modal - Shows detailed info when clicking a diagnosis */}
       <AnimatePresence>

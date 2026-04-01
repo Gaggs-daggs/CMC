@@ -5,6 +5,7 @@ Smart Triage & Mental Health Detection Service
 - Mental health screening
 - Crisis intervention
 """
+from __future__ import annotations
 import logging
 import re
 from typing import Dict, List, Any, Tuple

@@ -1,111 +1,106 @@
-version: '3.8'
+# ============================================
+# CMC Health - Docker Compose
+# ============================================
+# Usage:
+#   Development : docker compose up --build
+#   Production  : docker compose --profile prod up --build -d
+#   Stop        : docker compose down
+#   Logs        : docker compose logs -f backend
 
 services:
-  # MongoDB
-  mongodb:
-    image: mongo:7.0
-    container_name: health_ai_mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    environment:
-      - MONGO_INITDB_DATABASE=health_ai
-    networks:
-      - health_ai_network
-    restart: unless-stopped
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: health_ai_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - health_ai_network
-    restart: unless-stopped
-
-  # MQTT Broker (Mosquitto)
-  mqtt_broker:
-    image: eclipse-mosquitto:2
-    container_name: health_ai_mqtt
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mqtt/config:/mosquitto/config
-      - mqtt_data:/mosquitto/data
-      - mqtt_logs:/mosquitto/log
-    networks:
-      - health_ai_network
-    restart: unless-stopped
-
+  # ===========================================
   # FastAPI Backend
+  # ===========================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: health_ai_backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+    container_name: cmc_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
-      - MONGODB_URL=mongodb://mongodb:27017
-      - REDIS_URL=redis://redis:6379
-      - MQTT_BROKER=mqtt_broker
-    depends_on:
-      - mongodb
-      - redis
-      - mqtt_broker
-    networks:
-      - health_ai_network
-    restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  # Prometheus (Monitoring)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: health_ai_prometheus
-    ports:
-      - "9090:9090"
+      - PYTHONPATH=/app
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - health_ai_network
-    restart: unless-stopped
-
-  # Grafana (Dashboards)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: health_ai_grafana
+      # Persist drug vector DB and user data across restarts
+      - ./backend/app/data:/app/app/data
+      - backend_logs:/app/logs
     ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SERVER_ROOT_URL=http://localhost:3000
-    depends_on:
-      - prometheus
+      - "${BACKEND_PORT:-8000}:8000"
     networks:
-      - health_ai_network
+      - cmc_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ===========================================
+  # React Frontend (Vite build → nginx)
+  # ===========================================
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "/api/v1"
+        VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-890597975309-3n3148aql203qjepgp0ife5hsig63465.apps.googleusercontent.com}"
+    container_name: cmc_frontend
     restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    networks:
+      - cmc_net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ===========================================
+  # Nginx Reverse Proxy (optional, for single-port access)
+  # ===========================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: cmc_nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - cmc_net
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    profiles:
+      - prod
+
+  # ===========================================
+  # MQTT Broker (for IoT vitals - optional)
+  # ===========================================
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: cmc_mqtt
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./mqtt/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+    networks:
+      - cmc_net
+    profiles:
+      - iot
 
 volumes:
-  mongodb_data:
-  redis_data:
+  backend_logs:
   mqtt_data:
   mqtt_logs:
-  prometheus_data:
-  grafana_data:
 
 networks:
-  health_ai_network:
+  cmc_net:
     driver: bridge

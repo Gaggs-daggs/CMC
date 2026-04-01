@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Atlas" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">@color/atlas_dark</item>
+        <item name="android:navigationBarColor">@color/atlas_dark</item>
+        <item name="android:windowBackground">@color/atlas_dark</item>
+        <item name="colorPrimary">@color/atlas_primary</item>
+        <item name="colorSecondary">@color/atlas_accent</item>
+        <item name="colorSurface">@color/atlas_surface</item>
+    </style>
+
+    <style name="Theme.Atlas.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/atlas_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Atlas</item>
+    </style>
+
+</resources>

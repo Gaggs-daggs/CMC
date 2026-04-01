@@ -5,7 +5,7 @@
  * Includes muscles, joints, organs, and body parts.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 
 // ULTRA-COMPREHENSIVE body regions with symptoms - 100+ parts
 const BODY_REGIONS = {
@@ -265,14 +265,21 @@ const HumanBodyFront = ({ selectedParts, hoveredPart, onSelect, onHover }) => {
 
   const Part = ({ id, d, cx, cy, rx, ry, x, y, width, height, r, type = 'path' }) => {
     const isActive = selectedParts.includes(id) || hoveredPart === id;
+    const handleTap = useCallback((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect(id);
+    }, [id]);
     const props = {
       fill: getColor(id),
       stroke: getStroke(id),
       strokeWidth: isActive ? 3 : 1.8,
-      onClick: (e) => { e.stopPropagation(); onSelect(id); },
+      onClick: handleTap,
+      onTouchEnd: handleTap,
+      onPointerUp: handleTap,
       onMouseEnter: () => onHover(id),
       onMouseLeave: () => onHover(null),
-      style: { cursor: 'pointer', transition: 'all 0.15s ease' }
+      style: { cursor: 'pointer', transition: 'all 0.15s ease', pointerEvents: 'all', touchAction: 'manipulation' }
     };
     
     if (type === 'ellipse') return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} {...props} />;
@@ -524,14 +531,21 @@ const HumanBodyBack = ({ selectedParts, hoveredPart, onSelect, onHover }) => {
 
   const Part = ({ id, d, cx, cy, rx, ry, x, y, width, height, r, type = 'path' }) => {
     const isActive = selectedParts.includes(id) || hoveredPart === id;
+    const handleTap = useCallback((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect(id);
+    }, [id]);
     const props = {
       fill: getColor(id),
       stroke: getStroke(id),
       strokeWidth: isActive ? 3 : 1.8,
-      onClick: (e) => { e.stopPropagation(); onSelect(id); },
+      onClick: handleTap,
+      onTouchEnd: handleTap,
+      onPointerUp: handleTap,
       onMouseEnter: () => onHover(id),
       onMouseLeave: () => onHover(null),
-      style: { cursor: 'pointer', transition: 'all 0.15s ease' }
+      style: { cursor: 'pointer', transition: 'all 0.15s ease', pointerEvents: 'all', touchAction: 'manipulation' }
     };
     
     if (type === 'ellipse') return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} {...props} />;
@@ -789,11 +803,18 @@ export default function BodySelector({ onSelectSymptoms, onClose, language = 'en
 
   const t = translations[language] || translations.en;
 
-  const handleSelect = (id) => {
+  // Debounce to prevent double-toggle from touch + click + pointer events
+  const lastSelectRef = React.useRef({ id: null, time: 0 });
+  const handleSelect = useCallback((id) => {
+    const now = Date.now();
+    if (lastSelectRef.current.id === id && now - lastSelectRef.current.time < 300) {
+      return; // Skip duplicate within 300ms
+    }
+    lastSelectRef.current = { id, time: now };
     setSelectedParts(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   const handleConfirm = () => {
     const symptoms = selectedParts

@@ -627,24 +627,28 @@ export default function SessionSidebar({
       <style>{`
         .sidebar-toggle {
           position: fixed;
-          top: 16px;
-          left: 16px;
+          top: 14px;
+          left: 14px;
           z-index: 1001;
-          background: rgba(30, 30, 40, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
+          background: rgba(10, 37, 64, 0.85);
+          border: 1px solid rgba(102, 126, 234, 0.15);
+          border-radius: 10px;
           padding: 8px;
-          color: white;
+          color: rgba(255, 255, 255, 0.8);
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          backdrop-filter: blur(10px);
-          transition: all 0.2s;
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          transition: all 0.25s ease;
         }
         .sidebar-toggle:hover {
-          background: rgba(60, 60, 80, 0.9);
+          background: rgba(102, 126, 234, 0.15);
+          border-color: rgba(0, 212, 170, 0.3);
+          color: #00D4AA;
           transform: scale(1.05);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
         .sidebar-overlay {
@@ -652,17 +656,20 @@ export default function SessionSidebar({
           inset: 0;
           background: rgba(0, 0, 0, 0.5);
           z-index: 999;
-          backdrop-filter: blur(2px);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
         }
 
         .session-sidebar {
           position: fixed;
           top: 0;
           left: 0;
-          width: 200px;
+          width: 220px;
           height: 100vh;
-          background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-          border-right: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(10, 20, 40, 0.95);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-right: 1px solid rgba(102, 126, 234, 0.1);
           display: flex;
           flex-direction: column;
           z-index: 1000;
@@ -670,8 +677,8 @@ export default function SessionSidebar({
         }
 
         .sidebar-header {
-          padding: 10px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 12px;
+          border-bottom: 1px solid rgba(102, 126, 234, 0.08);
         }
 
         .new-chat-btn {
@@ -679,84 +686,101 @@ export default function SessionSidebar({
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 8px 12px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border: none;
-          border-radius: 8px;
+          padding: 10px 14px;
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(0, 212, 170, 0.1));
+          border: 1px solid rgba(102, 126, 234, 0.2);
+          border-radius: 12px;
           color: white;
           font-size: 13px;
-          font-weight: 500;
+          font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.3s ease;
+          font-family: 'Inter', sans-serif;
         }
         .new-chat-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(0, 212, 170, 0.2));
+          border-color: rgba(0, 212, 170, 0.4);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+        .new-chat-btn svg {
+          width: 18px;
+          height: 18px;
         }
 
         .sessions-list {
           flex: 1;
           overflow-y: auto;
-          padding: 12px;
+          padding: 8px;
         }
         .sessions-list::-webkit-scrollbar {
-          width: 6px;
+          width: 4px;
         }
         .sessions-list::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 3px;
+          background: rgba(102, 126, 234, 0.2);
+          border-radius: 999px;
         }
 
         .sidebar-loading, .no-sessions {
           text-align: center;
           padding: 24px;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 13px;
         }
         .no-sessions svg {
-          width: 48px;
-          height: 48px;
+          width: 40px;
+          height: 40px;
           margin-bottom: 12px;
-          opacity: 0.3;
+          opacity: 0.25;
         }
         .no-sessions .hint {
           font-size: 11px;
           margin-top: 6px;
+          color: rgba(255, 255, 255, 0.3);
         }
 
         .session-group {
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
 
         .session-date {
-          font-size: 10px;
-          color: rgba(255, 255, 255, 0.4);
-          padding: 4px 8px;
+          font-size: 0.6rem;
+          color: rgba(255, 255, 255, 0.3);
+          padding: 6px 8px;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.8px;
+          font-weight: 600;
         }
 
         .session-item {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 8px;
-          border-radius: 6px;
+          padding: 8px 10px;
+          border-radius: 10px;
           cursor: pointer;
-          transition: all 0.2s;
-          color: rgba(255, 255, 255, 0.8);
+          transition: all 0.2s ease;
+          color: rgba(255, 255, 255, 0.7);
+          margin-bottom: 2px;
         }
         .session-item:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(102, 126, 234, 0.08);
+          color: #fff;
         }
         .session-item.active {
-          background: rgba(102, 126, 234, 0.2);
-          border-left: 3px solid #667eea;
+          background: rgba(0, 212, 170, 0.1);
+          border: 1px solid rgba(0, 212, 170, 0.2);
+          color: #fff;
         }
         .session-item svg {
           flex-shrink: 0;
-          opacity: 0.6;
+          opacity: 0.5;
           width: 14px;
           height: 14px;
+        }
+        .session-item.active svg {
+          opacity: 0.9;
+          color: #00D4AA;
         }
 
         .session-info {
@@ -765,15 +789,16 @@ export default function SessionSidebar({
         }
         .session-title {
           display: block;
-          font-size: 11px;
+          font-size: 0.72rem;
+          font-weight: 500;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .session-preview {
           display: block;
-          font-size: 10px;
-          color: rgba(255, 255, 255, 0.4);
+          font-size: 0.6rem;
+          color: rgba(255, 255, 255, 0.3);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -792,46 +817,50 @@ export default function SessionSidebar({
           padding: 4px;
           background: transparent;
           border: none;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(255, 255, 255, 0.4);
           cursor: pointer;
-          border-radius: 4px;
+          border-radius: 6px;
           transition: all 0.2s;
         }
         .session-action-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.08);
           color: white;
         }
         .session-action-btn.delete:hover {
-          background: rgba(239, 68, 68, 0.2);
+          background: rgba(239, 68, 68, 0.15);
           color: #ef4444;
         }
 
         .sidebar-profile {
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.2);
+          border-top: 1px solid rgba(102, 126, 234, 0.08);
+          background: rgba(0, 0, 0, 0.15);
         }
 
         .profile-header {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 16px;
+          gap: 10px;
+          padding: 12px;
           cursor: pointer;
           transition: background 0.2s;
+          border-radius: 10px;
+          margin: 4px;
         }
         .profile-header:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.04);
         }
 
         .profile-avatar {
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
+          flex-shrink: 0;
+          box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
         }
 
         .profile-info {
@@ -840,8 +869,8 @@ export default function SessionSidebar({
         }
         .profile-name {
           display: block;
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 0.8rem;
+          font-weight: 600;
           color: white;
           white-space: nowrap;
           overflow: hidden;
@@ -849,50 +878,57 @@ export default function SessionSidebar({
         }
         .profile-phone {
           display: block;
-          font-size: 12px;
-          color: rgba(255, 255, 255, 0.5);
+          font-size: 0.65rem;
+          color: rgba(255, 255, 255, 0.4);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .profile-edit-form {
-          padding: 0 16px 16px;
+          padding: 0 12px 12px;
           overflow: hidden;
         }
 
         .form-group {
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
         .form-group label {
           display: block;
-          font-size: 11px;
-          color: rgba(255, 255, 255, 0.5);
+          font-size: 0.6rem;
+          color: rgba(255, 255, 255, 0.4);
           margin-bottom: 4px;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.8px;
+          font-weight: 600;
         }
         .form-group input, .form-group select {
           width: 100%;
           padding: 8px 12px;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(102, 126, 234, 0.12);
+          border-radius: 10px;
           color: white;
-          font-size: 14px;
+          font-size: 13px;
+          font-family: 'Inter', sans-serif;
+          transition: all 0.2s ease;
         }
         .form-group input:focus, .form-group select:focus {
           outline: none;
-          border-color: #667eea;
+          border-color: rgba(0, 212, 170, 0.4);
+          box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.1);
         }
         .form-group input::placeholder {
-          color: rgba(255, 255, 255, 0.3);
+          color: rgba(255, 255, 255, 0.25);
         }
         .form-group select option {
-          background: #1a1a2e;
+          background: #0a1428;
           color: white;
         }
 
         .form-row {
           display: flex;
-          gap: 12px;
+          gap: 10px;
         }
         .form-row .form-group {
           flex: 1;
@@ -905,22 +941,24 @@ export default function SessionSidebar({
           justify-content: center;
           gap: 8px;
           padding: 10px;
-          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+          background: linear-gradient(135deg, #00D4AA, #00b894);
           border: none;
-          border-radius: 6px;
+          border-radius: 10px;
           color: white;
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 13px;
+          font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
           margin-top: 8px;
+          font-family: 'Inter', sans-serif;
+          box-shadow: 0 2px 12px rgba(0, 212, 170, 0.25);
         }
         .save-profile-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(0, 212, 170, 0.35);
         }
         .save-profile-btn:disabled {
-          opacity: 0.6;
+          opacity: 0.5;
           cursor: not-allowed;
         }
 
@@ -930,27 +968,28 @@ export default function SessionSidebar({
           flex-wrap: wrap;
           gap: 6px;
           padding: 8px;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
           min-height: 36px;
         }
         .tag {
           display: inline-flex;
           align-items: center;
           padding: 4px 10px;
-          border-radius: 12px;
-          font-size: 12px;
+          border-radius: 999px;
+          font-size: 11px;
           font-weight: 500;
         }
         .allergy-tag {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-          border: 1px solid rgba(239, 68, 68, 0.3);
+          background: rgba(239, 68, 68, 0.12);
+          color: #fca5a5;
+          border: 1px solid rgba(239, 68, 68, 0.2);
         }
         .condition-tag {
-          background: rgba(245, 158, 11, 0.2);
-          color: #f59e0b;
-          border: 1px solid rgba(245, 158, 11, 0.3);
+          background: rgba(245, 158, 11, 0.12);
+          color: #fcd34d;
+          border: 1px solid rgba(245, 158, 11, 0.2);
         }
 
         /* Desktop styles */
@@ -988,25 +1027,26 @@ export default function SessionSidebar({
           align-items: center;
           justify-content: center;
           z-index: 10000;
-          backdrop-filter: blur(4px);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
         }
 
         .delete-confirm-modal {
-          background: #1e1e2e;
-          border-radius: 16px;
-          padding: 24px;
-          max-width: 340px;
+          background: rgba(15, 30, 55, 0.98);
+          border-radius: 20px;
+          padding: 28px;
+          max-width: 360px;
           width: 90%;
           text-align: center;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(102, 126, 234, 0.1);
+          border: 1px solid rgba(102, 126, 234, 0.15);
         }
 
         .delete-confirm-modal .modal-icon {
           width: 56px;
           height: 56px;
           border-radius: 50%;
-          background: rgba(239, 68, 68, 0.15);
+          background: rgba(239, 68, 68, 0.12);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1017,47 +1057,52 @@ export default function SessionSidebar({
         .delete-confirm-modal h3 {
           color: white;
           font-size: 18px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-weight: 700;
           margin: 0 0 8px;
         }
 
         .delete-confirm-modal p {
-          color: rgba(255, 255, 255, 0.6);
-          font-size: 14px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 13px;
           margin: 0 0 20px;
-          line-height: 1.5;
+          line-height: 1.6;
         }
 
         .delete-confirm-modal .modal-actions {
           display: flex;
-          gap: 12px;
+          gap: 10px;
         }
 
         .delete-confirm-modal .btn-cancel,
         .delete-confirm-modal .btn-delete {
           flex: 1;
-          padding: 12px;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 500;
+          padding: 11px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
           border: none;
+          font-family: 'Inter', sans-serif;
         }
 
         .delete-confirm-modal .btn-cancel {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.06);
           color: white;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .delete-confirm-modal .btn-cancel:hover {
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.1);
         }
 
         .delete-confirm-modal .btn-delete {
-          background: #ef4444;
+          background: linear-gradient(135deg, #ef4444, #dc2626);
           color: white;
+          box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3);
         }
         .delete-confirm-modal .btn-delete:hover {
-          background: #dc2626;
+          box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
           transform: translateY(-1px);
         }
 
@@ -1065,12 +1110,13 @@ export default function SessionSidebar({
         .title-edit-input {
           width: 100%;
           padding: 4px 8px;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid #667eea;
-          border-radius: 4px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(0, 212, 170, 0.4);
+          border-radius: 6px;
           color: white;
-          font-size: 13px;
+          font-size: 12px;
           outline: none;
+          font-family: 'Inter', sans-serif;
         }
 
         /* Session action buttons */
@@ -1085,7 +1131,7 @@ export default function SessionSidebar({
         }
 
         .session-action-btn.edit {
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(255, 255, 255, 0.4);
         }
         .session-action-btn.edit:hover {
           color: #667eea;

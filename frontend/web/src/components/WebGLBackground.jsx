@@ -1,6 +1,32 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+
+// ─── Detect if the device should skip heavy WebGL ──────────
+function useShouldRenderWebGL() {
+  const [shouldRender, setShouldRender] = useState(true)
+
+  useEffect(() => {
+    // Skip WebGL on slow connections
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
+    if (conn) {
+      const slow = conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g' || conn.saveData
+      if (slow) { setShouldRender(false); return }
+    }
+
+    // Skip on very small screens (likely budget phones)
+    if (window.innerWidth < 400 && window.devicePixelRatio < 2) {
+      setShouldRender(false); return
+    }
+
+    // Skip if device reports low memory (< 4 GB)
+    if (navigator.deviceMemory && navigator.deviceMemory < 4) {
+      setShouldRender(false); return
+    }
+  }, [])
+
+  return shouldRender
+}
 
 // DNA Helix Particle System
 function DNAHelix() {
@@ -241,8 +267,49 @@ function HeartbeatLine() {
   )
 }
 
-// Main WebGL Background Component
+// CSS-only lightweight fallback for low-end devices
+function CSSOnlyBackground({ contained }) {
+  return (
+    <div
+      style={{
+        position: contained ? 'absolute' : 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 0,
+        pointerEvents: 'none',
+        background: 'linear-gradient(135deg, #0A2540 0%, #1a365d 50%, #2d3748 100%)',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: `
+            radial-gradient(ellipse at 20% 20%, rgba(0, 212, 170, 0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(102, 126, 234, 0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 50%, rgba(118, 75, 162, 0.08) 0%, transparent 70%)
+          `,
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  )
+}
+
+// Main WebGL Background Component — now adaptive
 export default function WebGLBackground({ contained = false }) {
+  const shouldRender = useShouldRenderWebGL()
+
+  // Lightweight CSS fallback when WebGL is too heavy
+  if (!shouldRender) {
+    return <CSSOnlyBackground contained={contained} />
+  }
+
   return (
     <div
       style={{

@@ -83,8 +83,13 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str = "cmc_health_verify_2024"
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
     
+    # Google Fit API
+    GOOGLE_FIT_CLIENT_ID: Optional[str] = None
+    GOOGLE_FIT_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_FIT_REDIRECT_URI: str = "http://localhost:8000/api/v1/googlefit/callback"
+    
     class Config:
-        env_file = ".env"
+        env_file = str(Path(__file__).resolve().parent.parent / ".env")
         case_sensitive = True
         extra = "ignore"  # Ignore extra fields in .env
 

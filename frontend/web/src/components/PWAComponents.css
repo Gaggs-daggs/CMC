@@ -1,0 +1,197 @@
+/* ================================================
+   Atlas — PWA Component Styles
+   Install prompt, offline banner, update banner
+   ================================================ */
+
+/* ─── Install Prompt Banner ──────────────────── */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(10, 37, 64, 0.98), rgba(26, 54, 93, 0.98));
+  border-top: 1px solid rgba(102, 126, 234, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: pwa-slide-up 0.4s ease;
+  /* Safe area for notched phones */
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.pwa-install-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.pwa-install-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pwa-install-text strong {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.pwa-install-text span {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+}
+
+.pwa-install-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pwa-install-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+}
+
+.pwa-install-btn:active {
+  transform: scale(0.95);
+}
+
+.pwa-dismiss-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ─── Offline / Reconnected Banner ───────────── */
+.pwa-offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10001;
+  text-align: center;
+  padding: 10px 16px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+  animation: pwa-slide-down 0.3s ease;
+  /* Respect notch / status bar */
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+
+.pwa-offline-banner.offline {
+  background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+.pwa-offline-banner.reconnected {
+  background: linear-gradient(135deg, #10B981, #059669);
+  animation: pwa-slide-down 0.3s ease, pwa-fade-out 0.5s ease 2.5s forwards;
+}
+
+/* ─── Update Banner ──────────────────────────── */
+.pwa-update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: pwa-slide-down 0.3s ease;
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.pwa-update-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pwa-update-btn:active {
+  transform: scale(0.95);
+}
+
+/* ─── Animations ─────────────────────────────── */
+@keyframes pwa-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pwa-slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pwa-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; pointer-events: none; }
+}
+
+/* ─── Mobile Responsive ──────────────────────── */
+@media (max-width: 480px) {
+  .pwa-install-banner {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .pwa-install-text strong {
+    font-size: 0.82rem;
+  }
+
+  .pwa-install-text span {
+    font-size: 0.7rem;
+  }
+
+  .pwa-install-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .pwa-install-btn,
+  .pwa-dismiss-btn {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+/* ─── Reduce motion ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pwa-install-banner,
+  .pwa-offline-banner,
+  .pwa-update-banner {
+    animation: none;
+  }
+}

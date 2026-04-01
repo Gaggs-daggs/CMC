@@ -494,11 +494,17 @@ class SymptomNormalizer:
             "dizzy", "feeling dizzy", "very dizzy", "light headed",
             "lightheaded", "head spinning", "room spinning", "spinning",
             "vertigo", "unsteady", "off balance", "losing balance",
-            "wobbly", "faint", "feeling faint", "about to faint",
+            "wobbly",
             # Hindi
             "chakkar", "chakkar aa raha", "sir ghoom raha",
             # Tamil
             "talai sutral", "talai suttuthu",
+        ],
+        
+        "fainting": [
+            "faint", "fainted", "fainting", "feeling faint", "about to faint",
+            "passed out", "blacked out", "lost consciousness", "syncope",
+            "i fainted", "i am fainted",
         ],
         
         # ==========================================

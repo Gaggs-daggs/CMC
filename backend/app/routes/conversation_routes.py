@@ -256,15 +256,35 @@ async def send_message(request: MessageRequest):
                 )
                 if db_session:
                     # Restore session to in-memory dict
+                    restored_messages = db_session.get("messages", [])
+                    restored_symptoms = db_session.get("symptoms", [])
+                    
                     sessions[request.session_id] = {
                         "user_id": db_session.get("user_phone") or db_session.get("phone_number", ""),
                         "phone_number": db_session.get("user_phone") or db_session.get("phone_number", ""),
                         "language": db_session.get("language", request.language),
-                        "messages": db_session.get("messages", []),
-                        "symptoms": db_session.get("symptoms", []),
+                        "messages": restored_messages,
+                        "symptoms": restored_symptoms,
                         "is_returning_user": True
                     }
                     session = sessions[request.session_id]
+                    
+                    # CRITICAL: Also restore AI conversation memory so follow-ups work
+                    try:
+                        for msg in restored_messages[-10:]:  # Last 10 messages for context
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            if content:
+                                powerful_ai.memory.add_message(request.session_id, role, content)
+                                if role == "user":
+                                    powerful_ai.memory.track_symptoms(request.session_id, content)
+                        # Also restore tracked symptoms
+                        if restored_symptoms:
+                            powerful_ai.memory.add_symptoms(request.session_id, restored_symptoms)
+                        logger.info(f"🧠 Restored AI memory: {len(restored_messages)} msgs, {len(restored_symptoms)} symptoms")
+                    except Exception as mem_err:
+                        logger.warning(f"Could not restore AI memory: {mem_err}")
+                    
                     logger.info(f"🔄 Restored session from database: {request.session_id}")
             except Exception as e:
                 logger.warning(f"Could not restore session from database: {e}")
@@ -449,6 +469,8 @@ async def send_message(request: MessageRequest):
         
         return MessageResponse(
             response=ai_response["response"],
+            response_translated=ai_response.get("response_translated"),
+            language=request.language,
             symptoms_detected=ai_response.get("symptoms_detected", []),
             urgency_level=ai_response.get("urgency_level", "self_care"),
             confidence=ai_response.get("confidence", 0.5),

@@ -4,11 +4,18 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 import logging
+from dotenv import load_dotenv
+
+# Load .env file FIRST so all services can access API keys
+load_dotenv()
 
 from app.config import settings
 from app.utils.database import db
 from app.utils.logging_config import setup_logging
-from app.routes import conversation_routes, user_routes, vitals_routes, health_routes, image_routes, drug_routes, tts_routes, profile_routes, autocomplete_routes, session_routes, whatsapp_routes
+from app.routes import conversation_routes, user_routes, vitals_routes, health_routes, image_routes, drug_routes, tts_routes, profile_routes, autocomplete_routes, session_routes, whatsapp_routes, auth_routes
+from app.routes import prescription_routes, prescription_qa_routes, prescription_reminder_routes
+from app.routes import google_fit_routes
+from app.routes import sms_routes
 
 # Setup logging
 logger = setup_logging(settings.APP_NAME, settings.DEBUG)
@@ -53,8 +60,8 @@ app = FastAPI(
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins including file:// and Android WebView
+    allow_credentials=False,  # Must be False when allow_origins=["*"] for file:// support
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -106,6 +113,12 @@ app.include_router(profile_routes.router, prefix="/api/v1", tags=["User Profiles
 app.include_router(autocomplete_routes.router, prefix="/api/v1", tags=["Autocomplete"])
 app.include_router(session_routes.router, prefix="/api/v1", tags=["Sessions"])
 app.include_router(whatsapp_routes.router, prefix="/api/v1", tags=["WhatsApp"])
+app.include_router(auth_routes.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(prescription_routes.router, prefix="/api/v1", tags=["Prescription"])
+app.include_router(prescription_qa_routes.router, prefix="/api/v1", tags=["Prescription Q&A"])
+app.include_router(prescription_reminder_routes.router, prefix="/api/v1", tags=["Prescription Reminders"])
+app.include_router(google_fit_routes.router, prefix="/api/v1", tags=["Google Fit"])
+app.include_router(sms_routes.router, prefix="/api/v1", tags=["SMS Gateway"])
 
 
 # Root endpoint

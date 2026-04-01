@@ -851,14 +851,18 @@ def calculate_condition_score(condition_data: Dict, symptoms_lower: List[str],
 
 def generate_differential_diagnosis(symptoms: List[str], vitals: Optional[Dict] = None, 
                                      age: Optional[int] = None, gender: Optional[str] = None,
-                                     medical_history: Optional[List[str]] = None) -> List[Dict]:
+                                     medical_history: Optional[List[str]] = None,
+                                     raw_message: str = "") -> List[Dict]:
     """
     🏥 ADVANCED DIFFERENTIAL DIAGNOSIS
     Generate comprehensive differential diagnosis with confidence scores.
     NOW USES AI FOR DYNAMIC ANALYSIS - no fixed symptom mappings!
     Returns top 5 most likely conditions.
+    
+    raw_message: The user's original English message, used when symptom list is empty
+    so the AI can still diagnose disease names like "ebola", "malaria", etc.
     """
-    if not symptoms:
+    if not symptoms and not raw_message:
         return [{
             "condition": "Insufficient Information",
             "confidence": 0.30,
@@ -870,14 +874,20 @@ def generate_differential_diagnosis(symptoms: List[str], vitals: Optional[Dict] 
     # 🧠 TRY AI-POWERED DIAGNOSIS FIRST (Dynamic, no fixed mappings!)
     if HAS_AI_DIAGNOSIS:
         try:
-            ai_diagnoses = get_ai_diagnosis_sync(symptoms, age or 30, gender or "unknown")
+            ai_diagnoses = get_ai_diagnosis_sync(
+                symptoms, age or 30, gender or "unknown", raw_message=raw_message
+            )
             if ai_diagnoses and len(ai_diagnoses) >= 2:
                 # Format AI results
                 formatted = []
                 for d in ai_diagnoses:
+                    # Confidence arrives as integer 1-85 from the new engine
+                    # Convert to 0-1 scale. Handle both integer (>1) and decimal (<= 1) gracefully.
+                    raw_conf = d.get("confidence", 50)
+                    conf_decimal = raw_conf / 100.0 if raw_conf > 1 else raw_conf
                     formatted.append({
                         "condition": d.get("condition", "Unknown"),
-                        "confidence": d.get("confidence", 50) / 100.0,  # Convert to 0-1
+                        "confidence": conf_decimal,
                         "urgency": d.get("urgency", "routine"),
                         "description": d.get("description", ""),
                         "specialist": d.get("specialist"),

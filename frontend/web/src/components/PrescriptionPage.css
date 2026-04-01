@@ -1,0 +1,268 @@
+/* ===== Prescription Analyzer — Scoped Styles (rx- prefix) ===== */
+
+.rx-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0e1a;
+  color: #f1f5f9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Header ── */
+.rx-header {
+  background: rgba(17, 24, 39, 0.95);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+.rx-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rx-back-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rx-back-btn:hover {
+  border-color: #00d4aa;
+  color: #00d4aa;
+  background: rgba(0,212,170,0.1);
+}
+.rx-header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rx-header-logo h1 {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00d4aa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+.rx-header-logo span {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+}
+.rx-header-right {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Main ── */
+.rx-main {
+  flex: 1;
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Buttons ── */
+.rx-btn-primary {
+  padding: 12px 32px;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #00d4aa, #00b896);
+  color: #0a0e1a;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rx-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,170,0.35); }
+.rx-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.rx-btn-secondary {
+  padding: 10px 20px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rx-btn-secondary:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+
+/* ── Upload ── */
+.rx-upload-section { animation: rxFadeIn 0.5s ease-out; }
+.rx-upload-section h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.rx-upload-section > p { color: #94a3b8; margin-bottom: 32px; font-size: 15px; }
+.rx-upload-zone {
+  border: 2px dashed rgba(0,212,170,0.3);
+  border-radius: 20px;
+  padding: 64px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  background: #1a2332;
+  position: relative;
+  overflow: hidden;
+}
+.rx-upload-zone:hover { border-color: #00d4aa; background: #1f2b3d; box-shadow: 0 0 30px rgba(0,212,170,0.15); }
+.rx-upload-zone.dragging {
+  border-color: #00d4aa;
+  background: rgba(0,212,170,0.08);
+  box-shadow: 0 0 40px rgba(0,212,170,0.25), inset 0 0 60px rgba(0,212,170,0.05);
+  transform: scale(1.02);
+  border-width: 3px;
+}
+.rx-upload-icon { font-size: 48px; margin-bottom: 16px; }
+.rx-upload-text h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.rx-upload-text p { color: #64748b; font-size: 14px; margin-bottom: 4px; }
+.rx-upload-text .rx-accent { color: #00d4aa; font-weight: 500; }
+.rx-upload-preview img { max-height: 200px; border-radius: 12px; border: 2px solid rgba(0,212,170,0.3); }
+.rx-file-name { margin-top: 12px; color: #94a3b8; font-size: 13px; }
+.rx-upload-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+
+/* ── Loading ── */
+.rx-loading-state { text-align: center; padding: 80px 32px; animation: rxFadeIn 0.3s ease-out; }
+.rx-loading-spinner {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(255,255,255,0.06);
+  border-top-color: #00d4aa;
+  border-radius: 50%;
+  animation: rxSpin 0.8s linear infinite;
+  margin: 0 auto 24px;
+}
+.rx-loading-steps { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 24px auto 0; }
+.rx-loading-step {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  border-radius: 12px; background: #1a2332; font-size: 13px; color: #64748b; transition: all 0.25s;
+}
+.rx-loading-step.active { color: #00d4aa; background: rgba(0,212,170,0.1); border: 1px solid rgba(0,212,170,0.2); }
+.rx-loading-step.done { color: #22c55e; background: rgba(34,197,94,0.1); }
+
+/* ── Results ── */
+.rx-results-section { animation: rxSlideUp 0.5s ease-out; }
+.rx-results-section > h2 { font-size: 24px; font-weight: 700; margin-bottom: 24px; }
+.rx-section-label { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #64748b; letter-spacing: 0.04em; }
+
+.rx-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.rx-meta-chip {
+  display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+  border-radius: 9999px; background: #1a2332; border: 1px solid rgba(255,255,255,0.06); font-size: 13px; color: #94a3b8;
+}
+.rx-meta-chip .rx-label { color: #64748b; }
+
+.rx-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+@media (max-width: 768px) { .rx-results-grid { grid-template-columns: 1fr; } .rx-main { padding: 16px; } .rx-header { padding: 10px 16px; } }
+
+/* ── Medicine Card ── */
+.rx-medicine-card {
+  background: #1a2332; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;
+  padding: 20px; cursor: pointer; transition: all 0.25s; animation: rxFadeIn 0.4s ease-out forwards; opacity: 0;
+}
+.rx-medicine-card:hover { transform: translateY(-2px); border-color: #00d4aa; box-shadow: 0 0 30px rgba(0,212,170,0.15); background: #1f2b3d; }
+.rx-medicine-card.selected { border-color: #00d4aa; box-shadow: 0 0 30px rgba(0,212,170,0.15); }
+.rx-medicine-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.rx-medicine-name { font-size: 16px; font-weight: 600; color: #00d4aa; }
+.rx-medicine-dosage { font-size: 13px; color: #94a3b8; background: rgba(0,212,170,0.15); padding: 3px 10px; border-radius: 9999px; }
+.rx-medicine-details { display: flex; flex-direction: column; gap: 6px; }
+.rx-medicine-detail { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #94a3b8; }
+
+/* ── Analysis Panel ── */
+.rx-analysis-panel {
+  background: #1a2332; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 24px; animation: rxSlideUp 0.4s ease-out;
+}
+.rx-analysis-panel h3 { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #00d4aa; }
+.rx-analysis-section { margin-bottom: 20px; }
+.rx-analysis-section:last-child { margin-bottom: 0; }
+.rx-analysis-title { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.rx-analysis-section p { font-size: 14px; color: #94a3b8; line-height: 1.6; }
+
+.rx-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.rx-tag { padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+.rx-tag-warning { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); }
+.rx-tag-danger { background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+.rx-tag-success { background: rgba(34,197,94,0.12); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+.rx-tag-info { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
+
+/* ── Interactions ── */
+.rx-interactions-section { margin-top: 24px; }
+.rx-interactions-section h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.rx-interaction-card { background: #1a2332; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.rx-interaction-card.severe { border-left: 3px solid #ef4444; }
+.rx-interaction-card.moderate { border-left: 3px solid #f59e0b; }
+.rx-interaction-card.mild { border-left: 3px solid #3b82f6; }
+.rx-interaction-drugs { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.rx-interaction-desc { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 6px; }
+.rx-interaction-rec { font-size: 13px; color: #00d4aa; font-style: italic; }
+
+/* ── Advice Box ── */
+.rx-advice-box {
+  background: linear-gradient(135deg, rgba(0,212,170,0.1), rgba(59,130,246,0.08));
+  border: 1px solid rgba(0,212,170,0.15); border-radius: 16px; padding: 24px; margin-bottom: 32px;
+}
+.rx-advice-box h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #00d4aa; }
+.rx-advice-box p { font-size: 14px; color: #94a3b8; line-height: 1.7; }
+
+/* ── Schedule ── */
+.rx-schedule-section { margin-top: 32px; }
+.rx-schedule-section h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.rx-schedule-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.rx-schedule-card { background: #1a2332; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; transition: all 0.25s; animation: rxFadeIn 0.4s ease-out forwards; opacity: 0; }
+.rx-schedule-card:hover { border-color: #00d4aa; }
+.rx-schedule-med-name { font-size: 15px; font-weight: 600; color: #00d4aa; margin-bottom: 8px; }
+.rx-schedule-info { font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+.rx-schedule-timing { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.rx-timing-badge { padding: 4px 10px; border-radius: 9999px; background: rgba(59,130,246,0.15); color: #3b82f6; font-size: 12px; font-weight: 500; border: 1px solid rgba(59,130,246,0.15); }
+
+/* ── Q&A Chat ── */
+.rx-qa-section { margin-top: 32px; }
+.rx-qa-section h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.rx-chat-container { background: #1a2332; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; overflow: hidden; }
+.rx-chat-messages { max-height: 400px; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.rx-chat-message { display: flex; gap: 12px; animation: rxFadeIn 0.3s ease-out; }
+.rx-chat-message.user { flex-direction: row-reverse; }
+.rx-chat-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.rx-chat-message.user .rx-chat-avatar { background: rgba(59,130,246,0.15); }
+.rx-chat-message.assistant .rx-chat-avatar { background: rgba(0,212,170,0.15); }
+.rx-chat-bubble { max-width: 75%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+.rx-chat-message.user .rx-chat-bubble { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.15); border-top-right-radius: 4px; }
+.rx-chat-message.assistant .rx-chat-bubble { background: #111827; border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; border-top-left-radius: 4px; }
+.rx-chat-input-area { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); background: #111827; }
+.rx-chat-input {
+  flex: 1; padding: 10px 16px; border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.06); background: #0f1923; color: #f1f5f9;
+  font-size: 14px; outline: none; transition: all 0.25s;
+}
+.rx-chat-input:focus { border-color: #00d4aa; box-shadow: 0 0 0 3px rgba(0,212,170,0.15); }
+.rx-chat-input::placeholder { color: #64748b; }
+.rx-chat-send-btn {
+  padding: 10px 20px; border-radius: 9999px; border: none;
+  background: #00d4aa; color: #0a0e1a; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.rx-chat-send-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,212,170,0.3); }
+.rx-chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── Empty / Error ── */
+.rx-empty-state { text-align: center; padding: 48px; color: #64748b; }
+.rx-error-toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #ef4444;
+  padding: 12px 20px; border-radius: 12px; font-size: 14px; z-index: 1000; max-width: 400px; cursor: pointer;
+  animation: rxSlideUp 0.3s ease-out;
+}
+
+/* ── Animations ── */
+@keyframes rxFadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rxSlideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rxSpin { to { transform: rotate(360deg); } }

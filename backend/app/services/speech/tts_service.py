@@ -33,11 +33,12 @@ class SpeechSpeed(str, Enum):
 
 
 # Speed adjustments for different modes
+# These are ABSOLUTE rates (not stacked on language base rate)
 SPEED_ADJUSTMENTS = {
-    SpeechSpeed.FAST: 15,
+    SpeechSpeed.FAST: 10,
     SpeechSpeed.NORMAL: 0,
-    SpeechSpeed.SLOW: -20,
-    SpeechSpeed.VERY_SLOW: -35,
+    SpeechSpeed.SLOW: -15,
+    SpeechSpeed.VERY_SLOW: -25,
 }
 
 
@@ -189,7 +190,12 @@ class TTSService:
         speed: SpeechSpeed = None,
         slow: bool = False  # Legacy support
     ) -> str:
-        """Calculate speech rate based on language and speed setting."""
+        """Calculate speech rate based on language and speed setting.
+        
+        When a user-selected speed is provided (slow, very_slow, etc.), 
+        use ONLY that speed adjustment — don't stack on the language base rate,
+        which would make it extremely slow for non-English languages.
+        """
         config = self._voices.get(language, self._voices["en"])
         base_rate = int(config.get("rate", "+0%").replace("%", "").replace("+", ""))
         
@@ -200,7 +206,13 @@ class TTSService:
         speed = speed or self._default_speed
         adjustment = SPEED_ADJUSTMENTS.get(speed, 0)
         
-        final_rate = base_rate + adjustment
+        # If user chose a specific speed, use adjustment directly (not stacked)
+        # The base rate is just for "normal" mode tuning per-language
+        if speed != SpeechSpeed.NORMAL:
+            final_rate = adjustment
+        else:
+            final_rate = base_rate
+        
         return f"{final_rate:+d}%"
     
     async def generate_speech_async(

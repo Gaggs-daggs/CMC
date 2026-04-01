@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 tts_service = TTSService()
 
+# Simple in-memory cache to prevent duplicate TTS generation
+# Key: hash of (text, language, gender, speed) → audio bytes
+from hashlib import md5
+_tts_cache: dict[str, bytes] = {}
+_TTS_CACHE_MAX = 50  # Keep last 50 entries
+_TTS_MAX_TEXT_LENGTH = 1000  # Max chars for TTS (generous for non-Latin scripts like Tamil)
+
 
 class TTSRequest(BaseModel):
     text: str
@@ -54,16 +61,31 @@ async def text_to_speech(request: TTSRequest):
         if not request.text.strip():
             raise HTTPException(status_code=400, detail="Text is required")
         
+        # Truncate very long text to prevent slow TTS generation
+        text = request.text.strip()
+        if len(text) > _TTS_MAX_TEXT_LENGTH:
+            text = text[:_TTS_MAX_TEXT_LENGTH] + "..."
+        
         logger.info(
             f"TTS request: lang={request.language}, "
             f"gender={request.gender or 'female'}, "
             f"speed={request.speed or 'normal'}, "
-            f"text_length={len(request.text)}"
+            f"text_length={len(text)}"
         )
+        
+        # Check cache first
+        cache_key = md5(f"{text}|{request.language}|{request.gender}|{request.speed}".encode()).hexdigest()
+        if cache_key in _tts_cache:
+            logger.info(f"TTS cache hit for {cache_key[:8]}")
+            return Response(
+                content=_tts_cache[cache_key],
+                media_type="audio/mpeg",
+                headers={"Content-Disposition": "inline; filename=speech.mp3"}
+            )
         
         # Generate speech using Edge TTS
         audio_bytes = await tts_service.generate_speech_bytes_async(
-            text=request.text,
+            text=text,
             language=request.language,
             slow=request.slow,
             gender=request.gender,
@@ -72,6 +94,12 @@ async def text_to_speech(request: TTSRequest):
         
         if not audio_bytes:
             raise HTTPException(status_code=500, detail="Failed to generate speech")
+        
+        # Store in cache (evict oldest if full)
+        if len(_tts_cache) >= _TTS_CACHE_MAX:
+            oldest_key = next(iter(_tts_cache))
+            del _tts_cache[oldest_key]
+        _tts_cache[cache_key] = audio_bytes
         
         return Response(
             content=audio_bytes,

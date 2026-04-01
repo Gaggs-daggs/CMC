@@ -1,11 +1,16 @@
 """
 Image Analysis Routes for medical image analysis
+Pipes Groq Vision output through Cerebras gpt-oss-120b for full diagnosis pipeline
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional
 import logging
+import base64
 
 from ..services.image_analysis import image_analyzer
+
+# Import the same AI response pipeline used by conversation routes
+from ..services.ai_service_v2 import get_ai_response
 
 router = APIRouter(prefix="/image", tags=["image-analysis"])
 logger = logging.getLogger(__name__)
@@ -18,14 +23,15 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 async def analyze_image(
     file: UploadFile = File(...),
     context: Optional[str] = Form(default=""),
-    image_type: Optional[str] = Form(default="skin")
+    image_type: Optional[str] = Form(default="skin"),
+    session_id: Optional[str] = Form(default="image_session"),
+    language: Optional[str] = Form(default="en")
 ):
     """
-    Analyze a medical image for skin conditions, wounds, rashes, etc.
+    Analyze a medical image and return FULL diagnosis pipeline response.
     
-    - **file**: Image file (JPG, PNG, WebP)
-    - **context**: Additional context (e.g., "appeared 2 days ago, itchy")
-    - **image_type**: Type of condition (skin, wound, eye, general)
+    Pipeline: Groq Vision (image understanding) → Cerebras gpt-oss-120b (diagnosis)
+    Returns the same rich response as /conversation/message — diagnoses, medications, triage, etc.
     """
     try:
         # Validate file type
@@ -47,23 +53,52 @@ async def analyze_image(
                 detail="File too large. Maximum size is 10MB"
             )
         
-        # Analyze the image
-        logger.info(f"Analyzing image: {file.filename}, type: {image_type}")
-        result = await image_analyzer.analyze_image(
-            image_data=content,
-            context=context,
-            image_type=image_type
+        # Convert to base64 for the AI pipeline
+        image_b64 = base64.b64encode(content).decode("utf-8")
+        
+        # Build the message — include user context if provided
+        user_message = context if context else "Please analyze this medical image"
+        
+        logger.info(f"📸 Image uploaded: {file.filename}, piping through full diagnosis pipeline")
+        
+        # ── Pipe through the SAME get_ai_response() used by /conversation/message ──
+        # This gives us: diagnoses, medications, triage, follow-up questions, etc.
+        ai_response = await get_ai_response(
+            message=user_message,
+            session_id=session_id,
+            language=language,
+            vitals=None,
+            image_base64=image_b64
         )
         
-        if not result.get("success"):
-            raise HTTPException(status_code=500, detail=result.get("error", "Analysis failed"))
+        logger.info(f"✅ Full image diagnosis pipeline complete: {len(ai_response.get('diagnoses', []))} diagnoses, "
+                     f"{len(ai_response.get('medications', []))} medications")
         
+        # Return the FULL response — same format as /conversation/message
         return {
             "success": True,
-            "analysis": result.get("raw_analysis"),
-            "severity": result.get("severity"),
-            "recommended_action": result.get("recommended_action"),
-            "observations": result.get("observations"),
+            # Core response text
+            "response": ai_response.get("response", ""),
+            "response_translated": ai_response.get("response_translated"),
+            # Full diagnosis data
+            "diagnoses": ai_response.get("diagnoses", []),
+            "medications": ai_response.get("medications", []),
+            "follow_up_questions": ai_response.get("follow_up_questions", []),
+            "needs_more_info": ai_response.get("needs_more_info", False),
+            # Symptoms and conditions
+            "symptoms_detected": ai_response.get("symptoms_detected", []),
+            "conditions_suggested": ai_response.get("conditions_suggested", []),
+            "specialist_recommended": ai_response.get("specialist_recommended"),
+            # Triage
+            "triage": ai_response.get("triage"),
+            "urgency_level": ai_response.get("urgency_level", "self_care"),
+            # Metadata
+            "confidence": ai_response.get("confidence", 0.5),
+            "model_used": ai_response.get("model_used", "groq-vision+cerebras"),
+            "processing_time_ms": ai_response.get("processing_time_ms", 0),
+            # Legacy fields for backward compat
+            "analysis": ai_response.get("response", ""),
+            "severity": ai_response.get("urgency_level", "self_care"),
             "disclaimer": "This is AI-assisted analysis, not a medical diagnosis. Please consult a healthcare professional."
         }
         
