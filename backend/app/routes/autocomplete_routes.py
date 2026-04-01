@@ -7,7 +7,10 @@ from fastapi import APIRouter, Query
 from typing import List, Dict, Any
 import logging
 
-from ..services.database.postgres_profile_service import postgres_profile_service
+try:
+    from ..services.database.postgres_profile_service import postgres_profile_service
+except Exception:
+    postgres_profile_service = None
 
 router = APIRouter(prefix="/autocomplete", tags=["autocomplete"])
 logger = logging.getLogger(__name__)
